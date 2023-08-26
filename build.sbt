@@ -1,4 +1,12 @@
 val scala3Version = "3.3.0"
+lazy val processingCp = Def.setting(
+  Attributed.blankSeq(
+    IO
+      .read(file("cache/classpath.txt"))
+      .split(":")
+      .map(name => baseDirectory.value / name.trim)
+  )
+)
 
 lazy val root = project
   .in(file("."))
@@ -8,11 +16,7 @@ lazy val root = project
     scalaVersion := scala3Version,
     run / fork := true,
     connectInput := true,
-    Compile / unmanagedJars ++= Attributed.blankSeq(
-      IO.read(file("cache/classpath.txt"))
-        .split(":")
-        .map(name => baseDirectory.value / name.trim)
-    ),
+    Compile / unmanagedJars ++= processingCp.value,
     bgCopyClasspath := false,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "0.7.29" % Test,
@@ -26,5 +30,6 @@ lazy val root = project
     scalacOptions ++= Seq(
       "-no-indent"
     ),
-    Compile / mainClass := Some("net.kgtkr.seekprog.Main")
+    Compile / mainClass := Some("net.kgtkr.seekprog.Main"),
+    assembly / assemblyExcludedJars := processingCp.value
   )
