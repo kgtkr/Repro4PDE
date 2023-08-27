@@ -38,3 +38,4 @@ metals.sbt
 /lib
 /pdedist/
 /tooldist/
+.env.local

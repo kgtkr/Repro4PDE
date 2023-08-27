@@ -7,7 +7,7 @@ lazy val processingCp = Def.setting(
       .map(name => baseDirectory.value / name.trim)
   )
 )
-lazy val buildTool = taskKey[Unit]("Build as processing tool")
+lazy val buildTool = taskKey[File]("Build as processing tool")
 
 lazy val root = project
   .in(file("."))
@@ -44,6 +44,20 @@ lazy val root = project
       distDir.mkdir()
 
       val toolProperties = distDir / "tool.properties"
-      toolProperties.createNewFile()
+      IO.copyFile(
+        baseDirectory.value / "tool.properties",
+        toolProperties
+      )
+
+      val toolDir = distDir / "tool"
+      toolDir.mkdir()
+
+      val jarDir = toolDir / "Seekprog.jar"
+      IO.copyFile(
+        assembly.value,
+        jarDir
+      )
+
+      distDir
     }
   )
