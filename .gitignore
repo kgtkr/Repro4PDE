@@ -37,3 +37,4 @@ metals.sbt
 /cache/
 /lib
 /pdedist/
+/tooldist/

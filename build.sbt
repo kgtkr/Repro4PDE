@@ -7,6 +7,7 @@ lazy val processingCp = Def.setting(
       .map(name => baseDirectory.value / name.trim)
   )
 )
+lazy val buildTool = taskKey[Unit]("Build as processing tool")
 
 lazy val root = project
   .in(file("."))
@@ -31,5 +32,18 @@ lazy val root = project
       "-no-indent"
     ),
     Compile / mainClass := Some("net.kgtkr.seekprog.Main"),
-    assembly / assemblyExcludedJars := processingCp.value
+    assembly / assemblyExcludedJars := processingCp.value,
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", _*)      => MergeStrategy.discard
+      case PathList("module-info.class") => MergeStrategy.discard
+      case _                             => MergeStrategy.deduplicate
+    },
+    buildTool := {
+      val distDir = baseDirectory.value / "tooldist"
+      if (distDir.exists()) distDir.deleteOnExit()
+      distDir.mkdir()
+
+      val toolProperties = distDir / "tool.properties"
+      toolProperties.createNewFile()
+    }
   )
