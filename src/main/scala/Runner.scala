@@ -85,8 +85,15 @@ class Runner(val editor: JavaEditor) {
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
 
-    while (true) {
-      new VmManager(this, ssc).run();
-    }
+    Iterator
+      .from(0)
+      .takeWhile(_ => {
+        val vm = new VmManager(this, ssc);
+        vm.run();
+        vm.continueOnExit
+      })
+      .toList
+
+    ()
   }
 }

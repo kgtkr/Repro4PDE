@@ -61,6 +61,7 @@ class VmManager(
     val runner: Runner,
     val ssc: ServerSocketChannel
 ) {
+  var continueOnExit = false
   def run() = {
     val sketch = runner.editor.getSketch();
     val build = new JavaBuild(sketch);
@@ -217,6 +218,7 @@ class VmManager(
                 runner.frameCount = frameCount
               }
               vm.exit(0);
+              this.continueOnExit = true;
             }
             case RunnerCmd.UpdateLocation(frameCount, trimMax, events) => {
               runner.frameCount = frameCount;
