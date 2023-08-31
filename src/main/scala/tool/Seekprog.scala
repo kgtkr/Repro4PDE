@@ -22,8 +22,7 @@ class Seekprog() extends Tool {
       .find(_.getTitle() == "Java")
       .get
       .getClass()
-      .getClassLoader()
-      .asInstanceOf[URLClassLoader];
+      .getClassLoader();
     this.tool = URLClassLoader
       .newInstance(
         toolLoader.getURLs(),

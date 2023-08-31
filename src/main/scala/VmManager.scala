@@ -65,13 +65,11 @@ class VmManager(
     val sketch = runner.editor.getSketch();
     val build = new JavaBuild(sketch);
     val toolDir = new File(
-      runner.editor
-        .getBase()
-        .getContribTools()
-        .asScala
-        .find(_.getName() == "Seekprog")
-        .get
-        .getFolder(),
+      new File(
+        Base
+          .getSketchbookToolsFolder(),
+        "Seekprog"
+      ),
       "tool"
     );
     val mainClassName = build.build(true);
