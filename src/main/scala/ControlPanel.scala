@@ -107,7 +107,9 @@ object ControlPanel {
                   case RunnerEvent.UpdateLocation(value2, max2) => {
                     if (!loading) {
                       slider.max = max2.toDouble / 60
-                      slider.value = value2.toDouble / 60
+                      if (!slider.valueChanging.value) {
+                        slider.value = value2.toDouble / 60
+                      }
                     }
                   }
                   case RunnerEvent.StartSketch() => {
