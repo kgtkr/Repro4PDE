@@ -17,13 +17,7 @@ import scala.util.Try
 object RuntimeMain {
   var targetFrameCount = 0;
   var events: Vector[List[EventWrapper]] = Vector();
-  val socketChannel = {
-    val sockPath = Path.of(System.getProperty("seekprog.sock"));
-    val sockAddr = UnixDomainSocketAddress.of(sockPath);
-    val socketChannel = SocketChannel.open(StandardProtocolFamily.UNIX);
-    socketChannel.connect(sockAddr);
-    socketChannel
-  };
+  var socketChannel: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
 
   def run(sketch: PApplet, targetFrameCount: Int, events: String) = {
@@ -37,6 +31,13 @@ object RuntimeMain {
 
     this.targetFrameCount = targetFrameCount;
     this.events = decode[List[List[EventWrapper]]](events).right.get.toVector
+    this.socketChannel = {
+      val sockPath = Path.of(sketch.args(0));
+      val sockAddr = UnixDomainSocketAddress.of(sockPath);
+      val socketChannel = SocketChannel.open(StandardProtocolFamily.UNIX);
+      socketChannel.connect(sockAddr);
+      socketChannel
+    };
     this.sketchHandler = new SketchHandler(
       sketch,
       RuntimeMain.targetFrameCount,

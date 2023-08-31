@@ -54,88 +54,45 @@ import java.nio.ByteBuffer
 import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
 import net.kgtkr.seekprog.runtime.EventWrapper
-object VmManager {
-  def flushOut(vm: VirtualMachine) = {
-
-    {
-      val reader = new InputStreamReader(vm.process().getInputStream());
-      val writer = new OutputStreamWriter(System.out);
-      var size = 0;
-      val buf = new Array[Char](1024);
-      while (
-        reader.ready() && {
-          size = reader.read(buf);
-          size != -1
-        }
-      ) {
-        writer.write(buf, 0, size);
-      }
-      writer.flush();
-    }
-
-    {
-      val reader = new InputStreamReader(vm.process().getErrorStream());
-      val writer = new OutputStreamWriter(System.err);
-      var size = 0;
-      val buf = new Array[Char](1024);
-      while (
-        reader.ready() && {
-          size = reader.read(buf);
-          size != -1
-        }
-      ) {
-        writer.write(buf, 0, size);
-      }
-      writer.flush();
-    }
-  }
-}
+import processing.app.RunnerListenerEdtAdapter
+import processing.mode.java.runner.Runner as PdeRunner
 
 class VmManager(
     val runner: Runner,
     val ssc: ServerSocketChannel
 ) {
   def run() = {
-    val sketchPath = runner.sketchPath;
-    val sketchFolder = new File(sketchPath).getAbsoluteFile();
-    val pdeFile = new File(sketchFolder, sketchFolder.getName() + ".pde");
-    val outputFolder = new File("pdedist").getAbsoluteFile();
-    if (outputFolder.exists()) {
-      Util.removeDir(outputFolder);
-    }
-    outputFolder.mkdirs();
-
-    val javaMode =
-      ModeContribution
-        .load(
-          null,
-          Platform.getContentFile("modes/java"),
-          "processing.mode.java.JavaMode"
-        )
-        .getMode()
-        .asInstanceOf[JavaMode];
-
-    val sketch = new Sketch(pdeFile.getAbsolutePath(), javaMode);
+    val sketch = runner.editor.getSketch();
     val build = new JavaBuild(sketch);
-    val srcFolder = new File(outputFolder, "source");
-    val mainClassName = build.build(srcFolder, outputFolder, true);
-    val javaLibraryPath = build.getJavaLibraryPath();
+    val toolDir = new File(
+      runner.editor
+        .getBase()
+        .getContribTools()
+        .asScala
+        .find(_.getName() == "Seekprog")
+        .get
+        .getFolder(),
+      "tool"
+    );
+    val mainClassName = build.build(true);
+    val pdeRunner =
+      new PdeRunner(build, new RunnerListenerEdtAdapter(runner.editor));
 
-    val launchingConnector =
-      Bootstrap.virtualMachineManager().defaultConnector();
-    val env = launchingConnector.defaultArguments();
-    env.get("main").setValue(mainClassName);
-    env
-      .get("options")
-      .setValue(
-        "-classpath " + System.getProperty(
-          "java.class.path"
-        ) + ":" + outputFolder + " -Djava.library.path=" + System.getProperty(
-          "java.library.path"
-        ) + ":" + javaLibraryPath + " -Djna.nosys=true "
-          + "-Dseekprog.sock=" + runner.sockPath.toString()
-      );
-    val vm = launchingConnector.launch(env);
+    val cp = toolDir
+      .listFiles()
+      .map(File.pathSeparator + _.getAbsolutePath())
+      .mkString("");
+    val classPathField =
+      build.getClass().getDeclaredField("classPath");
+    classPathField.setAccessible(true);
+    classPathField.set(
+      build,
+      build.getClassPath()
+        + cp
+    );
+
+    val vm =
+      pdeRunner.debug(Array(runner.sockPath.toString()));
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();
@@ -249,8 +206,6 @@ class VmManager(
           }
         }
 
-        VmManager.flushOut(vm);
-
         for (
           cmd <- Iterator
             .from(0)
@@ -303,8 +258,6 @@ class VmManager(
       case e: Exception => {
         e.printStackTrace();
       }
-    } finally {
-      VmManager.flushOut(vm);
     }
   }
 }

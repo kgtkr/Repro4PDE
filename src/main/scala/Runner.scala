@@ -51,6 +51,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import net.kgtkr.seekprog.runtime.EventWrapper
 import scala.collection.mutable.Buffer
+import processing.mode.java.JavaEditor
 
 enum RunnerCmd {
   case ReloadSketch(frameCount: Option[Int] = None);
@@ -66,7 +67,7 @@ enum RunnerEvent {
   case StartSketch();
 }
 
-class Runner(val sketchPath: String) {
+class Runner(val editor: JavaEditor) {
   val cmdQueue = new LinkedTransferQueue[RunnerCmd]();
   // 1つのスレッドからしかアクセスしないこと
   var eventListeners = List[RunnerEvent => Unit]();
@@ -75,18 +76,14 @@ class Runner(val sketchPath: String) {
   var maxFrameCount = 0;
   val events = Buffer[List[EventWrapper]]();
 
-  val sockPath = Path.of(sketchPath, "seekprog.sock")
+  val sockPath =
+    Path.of(editor.getSketch().getFolder().getAbsolutePath(), "seekprog.sock")
 
   def run() = {
     Files.deleteIfExists(sockPath);
     val sockAddr = UnixDomainSocketAddress.of(sockPath);
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
-
-    Base.setCommandLine();
-    Platform.init();
-    Preferences.init();
-    Base.locateSketchbookFolder();
 
     while (true) {
       new VmManager(this, ssc).run();

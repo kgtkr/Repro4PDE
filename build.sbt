@@ -18,7 +18,6 @@ lazy val root = project
     run / fork := true,
     connectInput := true,
     Compile / unmanagedJars ++= processingCp.value,
-    bgCopyClasspath := false,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "org.scalafx" %% "scalafx" % "20.0.0-R31"
@@ -31,16 +30,9 @@ lazy val root = project
     scalacOptions ++= Seq(
       "-no-indent"
     ),
-    Compile / mainClass := Some("net.kgtkr.seekprog.Main"),
-    assembly / assemblyExcludedJars := processingCp.value,
-    assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", _*)      => MergeStrategy.discard
-      case PathList("module-info.class") => MergeStrategy.discard
-      case _                             => MergeStrategy.deduplicate
-    },
     buildTool := {
       val distDir = baseDirectory.value / "tooldist"
-      if (distDir.exists()) distDir.deleteOnExit()
+      if (distDir.exists()) distDir.delete()
       distDir.mkdir()
 
       val toolProperties = distDir / "tool.properties"
@@ -52,11 +44,21 @@ lazy val root = project
       val toolDir = distDir / "tool"
       toolDir.mkdir()
 
-      val jarDir = toolDir / "Seekprog.jar"
-      IO.copyFile(
-        assembly.value,
-        jarDir
-      )
+      val jarDir =
+        IO.copyFile(
+          (Compile / packageBin).value,
+          toolDir / "Seekprog.jar"
+        )
+      val exclude = processingCp.value.map(_.data.getPath()).toSet
+      for (
+        file <- (Compile / dependencyClasspathAsJars).value
+          .filterNot(jar => exclude.contains(jar.data.getPath()))
+      ) {
+        IO.copyFile(
+          file.data,
+          toolDir / file.data.getName()
+        )
+      }
 
       distDir
     }

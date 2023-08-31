@@ -3,7 +3,7 @@ package net.kgtkr.seekprog.tool;
 import processing.app.tools.Tool
 import processing.app.Base
 import processing.mode.java.JavaEditor
-
+import net.kgtkr.seekprog.ControlPanel
 class SeekprogTool() extends Tool {
   var base: Base = null
 
@@ -15,6 +15,6 @@ class SeekprogTool() extends Tool {
 
   override def run() = {
     val editor = this.base.getActiveEditor().asInstanceOf[JavaEditor]
-    println(editor)
+    ControlPanel.show(editor)
   }
 }
