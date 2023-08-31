@@ -76,8 +76,11 @@ class Runner(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val events = Buffer[List[EventWrapper]]();
 
-  val sockPath =
-    Path.of(editor.getSketch().getFolder().getAbsolutePath(), "seekprog.sock")
+  val sockPath = {
+    val tempDir = Files.createTempDirectory("seekprog");
+    tempDir.toFile().deleteOnExit();
+    Path.of(tempDir.toString(), "seekprog.sock")
+  }
 
   def run() = {
     Files.deleteIfExists(sockPath);
