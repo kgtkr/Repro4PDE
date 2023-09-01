@@ -246,6 +246,7 @@ class VmManager(
                 )
               }
             }
+            case RunnerCmd.PauseSketch() => {}
           }
         }
 

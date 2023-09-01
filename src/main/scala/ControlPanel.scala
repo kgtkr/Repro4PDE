@@ -24,6 +24,10 @@ import javax.swing.SwingUtilities
 import javax.swing.JFrame
 import scalafx.embed.swing.SFXPanel
 import processing.mode.java.JavaBuild
+import scalafx.scene.layout.VBox
+import scalafx.scene.control.Button
+import scalafx.beans.property.ObjectProperty
+import scalafx.beans.property.BooleanProperty
 
 object ControlPanel {
   def show(editor: JavaEditor): Unit = {
@@ -32,10 +36,9 @@ object ControlPanel {
     editor.prepareRun();
     editor.activateRun();
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
+    val playing = BooleanProperty(false);
+    val loading = BooleanProperty(false);
     val runner = new Runner(editor)
-    new Thread(() => runner.run()).start()
-
-    var loading = true
 
     new Thread(() => {
       val watcher = FileSystems.getDefault().newWatchService();
@@ -58,11 +61,10 @@ object ControlPanel {
             case filename: Path => {
               if (filename.toString().endsWith(".pde")) {
                 Platform.runLater {
-                  if (!loading) {
-                    loading = true
+                  if (!loading.value) {
+                    loading.value = true
                     runner.cmdQueue.add(RunnerCmd.ReloadSketch())
                   }
-
                 }
               }
             }
@@ -88,54 +90,101 @@ object ControlPanel {
       Platform.runLater(() => {
         val scene = new Scene {
           fill = Color.rgb(38, 38, 38)
-          content = new HBox {
+          content = new VBox {
             padding = Insets(50, 80, 50, 80)
-            val slider = new Slider(0, 0, 0) {
-              valueChanging.addListener({ (_, _, changing) =>
-                if (!changing && !loading) {
-                  loading = true
-                  runner.cmdQueue.add(
-                    RunnerCmd.ReloadSketch(Some((value.value * 60).toInt))
-                  );
-                }
-                ()
-              })
-            };
-            runner.eventListeners = (event => {
-              Platform.runLater {
-                event match {
-                  case RunnerEvent.UpdateLocation(value2, max2) => {
-                    if (!loading) {
-                      slider.max = max2.toDouble / 60
-                      if (!slider.valueChanging.value) {
-                        slider.value = value2.toDouble / 60
+            children = Seq(
+              new HBox {
+                val slider = new Slider(0, 0, 0) {
+                  disable <== loading
+                  valueChanging.addListener({ (_, oldChanging, changing) =>
+                    if (oldChanging && !changing && !loading.value) {
+                      loading.value = true
+                      runner.cmdQueue.add(
+                        RunnerCmd.ReloadSketch(Some((value.value * 60).toInt))
+                      );
+                    }
+                    ()
+                  })
+                };
+                runner.eventListeners = (event => {
+                  Platform.runLater {
+                    event match {
+                      case RunnerEvent.UpdateLocation(value2, max2) => {
+                        if (!loading.value) {
+                          slider.max = max2.toDouble / 60
+                          if (!slider.valueChanging.value) {
+                            slider.value = value2.toDouble / 60
+                          }
+                        }
+                      }
+                      case RunnerEvent.StartSketch() => {
+                        loading.value = false
+                      }
+                      case RunnerEvent.PausedSketch() => {
+                        loading.value = false
                       }
                     }
                   }
-                  case RunnerEvent.StartSketch() => {
-                    loading = false
-                  }
-                }
-              }
-            }) :: runner.eventListeners;
+                }) :: runner.eventListeners;
 
-            children = Seq(
-              slider,
-              new Text {
-                style = "-fx-font: normal bold 10pt sans-serif"
-                fill = White
-                text <== Bindings.createStringBinding(
-                  () =>
-                    f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
-                  slider.value,
-                  slider.max
+                children = Seq(
+                  slider,
+                  new Text {
+                    style = "-fx-font: normal bold 10pt sans-serif"
+                    fill = White
+                    text <== Bindings.createStringBinding(
+                      () =>
+                        f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
+                      slider.value,
+                      slider.max
+                    )
+                  }
+                )
+              },
+              new HBox(10) {
+                alignment = scalafx.geometry.Pos.Center
+                children = Seq(
+                  new Button {
+                    text <== Bindings.createStringBinding(
+                      () =>
+                        if (playing.value) {
+                          "⏸"
+                        } else {
+                          "▶"
+                        },
+                      playing
+                    )
+                    disable <== loading
+                    onAction = _ => {
+                      loading.value = true
+
+                      if (playing.value) {
+                        playing.value = false
+                        runner.cmdQueue.add(RunnerCmd.PauseSketch())
+                      } else {
+                        playing.value = true
+                        new Thread(() => {
+                          runner.run()
+                          Platform.runLater {
+                            playing.value = false
+                          }
+                        }).start()
+                      }
+
+                    }
+                  }
                 )
               }
             )
           }
+
         };
 
         fxPanel.setScene(scene);
+
+        SwingUtilities.invokeLater(() => {
+          frame.pack();
+        });
       });
     });
   }
