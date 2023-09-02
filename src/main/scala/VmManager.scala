@@ -56,6 +56,7 @@ import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
 import net.kgtkr.seekprog.runtime.EventWrapper
 import processing.app.RunnerListenerEdtAdapter
 import processing.mode.java.runner.Runner as PdeRunner
+import net.kgtkr.seekprog.runtime.RuntimeCmd
 
 class VmManager(
     val runner: Runner,
@@ -102,8 +103,18 @@ class VmManager(
       listener(RunnerEvent.StartSketch())
     }
 
+    val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
+
     new Thread(() => {
       val sc = ssc.accept();
+
+      new Thread(() => {
+        while (true) {
+          val cmd = runtimeCmdQueue.take();
+          sc.write(cmd.toBytes());
+        }
+      }).start()
+
       val buf = ByteBuffer.allocate(1024);
       val sBuf = new StringBuffer();
 
@@ -117,6 +128,16 @@ class VmManager(
               runner.cmdQueue.add(
                 RunnerCmd.UpdateLocation(frameCount, trimMax, events)
               );
+            }
+            case RuntimeEvent.OnPaused => {
+              for (listener <- runner.eventListeners) {
+                listener(RunnerEvent.PausedSketch())
+              }
+            }
+            case RuntimeEvent.OnResumed => {
+              for (listener <- runner.eventListeners) {
+                listener(RunnerEvent.ResumedSketch())
+              }
             }
           }
           sBuf.setLength(0);
@@ -246,7 +267,12 @@ class VmManager(
                 )
               }
             }
-            case RunnerCmd.PauseSketch() => {}
+            case RunnerCmd.PauseSketch() => {
+              runtimeCmdQueue.add(RuntimeCmd.Pause());
+            }
+            case RunnerCmd.ResumeSketch() => {
+              runtimeCmdQueue.add(RuntimeCmd.Resume());
+            }
           }
         }
 

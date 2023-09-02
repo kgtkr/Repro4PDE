@@ -22,6 +22,8 @@ enum RuntimeEvent {
       trimMax: Boolean,
       events: List[List[EventWrapper]]
   );
+  case OnPaused;
+  case OnResumed;
 
   def toBytes(): ByteBuffer = {
     ByteBuffer.wrap(

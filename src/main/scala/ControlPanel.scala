@@ -29,6 +29,12 @@ import scalafx.scene.control.Button
 import scalafx.beans.property.ObjectProperty
 import scalafx.beans.property.BooleanProperty
 
+enum PlayerState {
+  case Playing;
+  case Paused;
+  case Stopped;
+}
+
 object ControlPanel {
   def show(editor: JavaEditor): Unit = {
     editor.statusBusy();
@@ -36,9 +42,9 @@ object ControlPanel {
     editor.prepareRun();
     editor.activateRun();
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
-    val playing = BooleanProperty(false);
     val loading = BooleanProperty(false);
     val runner = new Runner(editor)
+    val playerState = ObjectProperty(PlayerState.Stopped);
 
     new Thread(() => {
       val watcher = FileSystems.getDefault().newWatchService();
@@ -123,6 +129,9 @@ object ControlPanel {
                       case RunnerEvent.PausedSketch() => {
                         loading.value = false
                       }
+                      case RunnerEvent.ResumedSketch() => {
+                        loading.value = false
+                      }
                     }
                   }
                 }) :: runner.eventListeners;
@@ -147,30 +156,37 @@ object ControlPanel {
                   new Button {
                     text <== Bindings.createStringBinding(
                       () =>
-                        if (playing.value) {
+                        if (playerState.value != PlayerState.Stopped) {
                           "⏸"
                         } else {
                           "▶"
                         },
-                      playing
+                      playerState
                     )
                     disable <== loading
                     onAction = _ => {
-                      loading.value = true
-
-                      if (playing.value) {
-                        playing.value = false
-                        runner.cmdQueue.add(RunnerCmd.PauseSketch())
-                      } else {
-                        playing.value = true
-                        new Thread(() => {
-                          runner.run()
-                          Platform.runLater {
-                            playing.value = false
-                          }
-                        }).start()
+                      playerState.value match {
+                        case PlayerState.Playing => {
+                          playerState.value = PlayerState.Paused;
+                          loading.value = true
+                          runner.cmdQueue.add(RunnerCmd.PauseSketch())
+                        }
+                        case PlayerState.Paused => {
+                          playerState.value = PlayerState.Playing;
+                          loading.value = true
+                          runner.cmdQueue.add(RunnerCmd.ResumeSketch())
+                        }
+                        case PlayerState.Stopped => {
+                          playerState.value = PlayerState.Playing;
+                          loading.value = true
+                          new Thread(() => {
+                            runner.run()
+                            Platform.runLater {
+                              playerState.value = PlayerState.Stopped;
+                            }
+                          }).start()
+                        }
                       }
-
                     }
                   }
                 )

@@ -17,7 +17,6 @@ import scala.util.Try
 class SketchHandler(
     applet: PApplet,
     targetFrameCount: Int,
-    socketChannel: SocketChannel,
     reproductionEvents: Vector[List[EventWrapper]]
 ) {
   var onTarget = false;
@@ -40,9 +39,8 @@ class SketchHandler(
           "targetFrameCount: " + this.targetFrameCount + ", " +
           "frameRate: " + this.targetFrameCount / ms * 1000
       );
-      socketChannel.write(
+      RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent.OnTargetFrameCount
-          .toBytes()
       )
     }
 
@@ -62,14 +60,13 @@ class SketchHandler(
     }
 
     if (this.onTarget && this.applet.frameCount % 60 == 0) {
-      socketChannel.write(
+      RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent
           .OnUpdateLocation(
             this.applet.frameCount,
             this.stopReproductionEvent,
             this.eventsBuf.toList
           )
-          .toBytes()
       )
       this.eventsBuf.clear();
     }

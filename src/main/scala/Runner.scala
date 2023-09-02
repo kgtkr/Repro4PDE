@@ -61,12 +61,14 @@ enum RunnerCmd {
       events: List[List[EventWrapper]]
   );
   case PauseSketch();
+  case ResumeSketch();
 }
 
 enum RunnerEvent {
   case UpdateLocation(frameCount: Int, max: Int);
   case StartSketch();
   case PausedSketch();
+  case ResumedSketch();
 }
 
 class Runner(val editor: JavaEditor) {

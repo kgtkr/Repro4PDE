@@ -13,12 +13,18 @@ import scala.collection.mutable.Buffer
 import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
 import scala.util.Try
+import java.util.concurrent.LinkedTransferQueue
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 object RuntimeMain {
   var targetFrameCount = 0;
   var events: Vector[List[EventWrapper]] = Vector();
-  var socketChannel: SocketChannel = null;
+  private var socketChannel: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
+  var paused = false;
+  val resumeQueue = new LinkedTransferQueue[Unit]();
+  val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
 
   def run(sketch: PApplet, targetFrameCount: Int, events: String) = {
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
@@ -38,10 +44,40 @@ object RuntimeMain {
       socketChannel.connect(sockAddr);
       socketChannel
     };
+    new Thread(() => {
+      while (true) {
+        val event = runtimeEventQueue.take();
+        socketChannel.write(event.toBytes())
+      }
+    }).start();
+    new Thread(() => {
+      while (true) {
+        val buf = ByteBuffer.allocate(1024);
+        val sBuf = new StringBuffer();
+
+        while (socketChannel.read(buf) != -1) {
+          buf.flip();
+          sBuf.append(StandardCharsets.UTF_8.decode(buf));
+          if (sBuf.charAt(sBuf.length() - 1) == '\n') {
+            RuntimeCmd.fromJSON(sBuf.toString()) match {
+              case RuntimeCmd.Pause() => {
+                paused = true;
+              }
+              case RuntimeCmd.Resume() => {
+                paused = false;
+                resumeQueue.put(());
+              }
+            }
+            sBuf.setLength(0);
+          }
+
+          buf.clear()
+        }
+      }
+    }).start();
     this.sketchHandler = new SketchHandler(
       sketch,
       RuntimeMain.targetFrameCount,
-      socketChannel,
       RuntimeMain.events
     );
   }
