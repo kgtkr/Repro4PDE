@@ -58,13 +58,26 @@ import processing.app.RunnerListenerEdtAdapter
 import processing.mode.java.runner.Runner as PdeRunner
 import net.kgtkr.seekprog.runtime.RuntimeCmd
 import java.nio.channels.ClosedByInterruptException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.net.UnixDomainSocketAddress
+import java.net.StandardProtocolFamily
 
 class VmManager(
-    val runner: Runner,
-    val ssc: ServerSocketChannel
+    val runner: Runner
 ) {
   var continueOnExit = false
   def run() = {
+    val sockPath = {
+      val tempDir = Files.createTempDirectory("seekprog");
+      tempDir.toFile().deleteOnExit();
+      Path.of(tempDir.toString(), "seekprog.sock")
+    }
+
+    val sockAddr = UnixDomainSocketAddress.of(sockPath);
+    val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+    ssc.bind(sockAddr);
+
     val sketch = runner.editor.getSketch();
     val build = new JavaBuild(sketch);
     val toolDir = new File(
@@ -93,7 +106,7 @@ class VmManager(
     );
 
     val vm =
-      pdeRunner.debug(Array(runner.sockPath.toString()));
+      pdeRunner.debug(Array(sockPath.toString()));
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();
@@ -165,7 +178,7 @@ class VmManager(
         }
         ()
       });
-      runtimeEventThread.start();
+    runtimeEventThread.start();
 
     try {
       while (true) {

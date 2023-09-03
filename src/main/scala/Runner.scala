@@ -82,21 +82,10 @@ class Runner(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val events = Buffer[List[EventWrapper]]();
 
-  val sockPath = {
-    val tempDir = Files.createTempDirectory("seekprog");
-    tempDir.toFile().deleteOnExit();
-    Path.of(tempDir.toString(), "seekprog.sock")
-  }
-
   def run() = {
-    Files.deleteIfExists(sockPath);
-    val sockAddr = UnixDomainSocketAddress.of(sockPath);
-    val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
-    ssc.bind(sockAddr);
-
     Iterator
       .continually({
-        val vm = new VmManager(this, ssc);
+        val vm = new VmManager(this);
         vm.run();
         vm.continueOnExit
       })
