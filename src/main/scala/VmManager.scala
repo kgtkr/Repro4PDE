@@ -99,9 +99,7 @@ class VmManager(
     classPrepareRequest.addClassFilter(mainClassName);
     classPrepareRequest.enable();
 
-    for (listener <- runner.eventListeners) {
-      listener(RunnerEvent.StartSketch())
-    }
+    runner.eventListeners.foreach(_(RunnerEvent.StartSketch()))
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
 
@@ -130,14 +128,10 @@ class VmManager(
               );
             }
             case RuntimeEvent.OnPaused => {
-              for (listener <- runner.eventListeners) {
-                listener(RunnerEvent.PausedSketch())
-              }
+              runner.eventListeners.foreach(_(RunnerEvent.PausedSketch()))
             }
             case RuntimeEvent.OnResumed => {
-              for (listener <- runner.eventListeners) {
-                listener(RunnerEvent.ResumedSketch())
-              }
+              runner.eventListeners.foreach(_(RunnerEvent.ResumedSketch()))
             }
           }
           sBuf.setLength(0);
@@ -261,11 +255,9 @@ class VmManager(
               for ((event, i) <- events.zipWithIndex) {
                 runner.events(frameCount - events.length + i) = event;
               }
-              for (listener <- runner.eventListeners) {
-                listener(
-                  RunnerEvent.UpdateLocation(frameCount, runner.maxFrameCount)
-                )
-              }
+              runner.eventListeners.foreach(
+                _(RunnerEvent.UpdateLocation(frameCount, runner.maxFrameCount))
+              )
             }
             case RunnerCmd.PauseSketch() => {
               runtimeCmdQueue.add(RuntimeCmd.Pause());
