@@ -43,6 +43,7 @@ object ControlPanel {
     editor.clearConsole();
     editor.prepareRun();
     editor.activateRun();
+    Platform.implicitExit = false;
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
     val loading = BooleanProperty(false);
     val runner = new Runner(editor)
