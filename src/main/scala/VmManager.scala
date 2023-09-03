@@ -57,6 +57,7 @@ import net.kgtkr.seekprog.runtime.EventWrapper
 import processing.app.RunnerListenerEdtAdapter
 import processing.mode.java.runner.Runner as PdeRunner
 import net.kgtkr.seekprog.runtime.RuntimeCmd
+import java.nio.channels.ClosedByInterruptException
 
 class VmManager(
     val runner: Runner,
@@ -103,44 +104,68 @@ class VmManager(
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
 
-    new Thread(() => {
-      val sc = ssc.accept();
-
+    val runtimeEventThread =
       new Thread(() => {
-        while (true) {
-          val cmd = runtimeCmdQueue.take();
-          sc.write(cmd.toBytes());
-        }
-      }).start()
+        val sc = ssc.accept();
 
-      val buf = ByteBuffer.allocate(1024);
-      val sBuf = new StringBuffer();
+        val runtimeCmdThread = new Thread(() => {
+          for (
+            cmd <- Iterator
+              .continually({
+                try {
+                  runtimeCmdQueue.take()
+                } catch {
+                  case e: InterruptedException => {
+                    null
+                  }
+                }
+              })
+              .takeWhile(_ != null)
+          ) {
+            sc.write(cmd.toBytes());
+          }
+        });
+        runtimeCmdThread.start();
 
-      while (sc.read(buf) != -1) {
-        buf.flip();
-        sBuf.append(StandardCharsets.UTF_8.decode(buf));
-        if (sBuf.charAt(sBuf.length() - 1) == '\n') {
-          RuntimeEvent.fromJSON(sBuf.toString()) match {
-            case RuntimeEvent.OnTargetFrameCount => {}
-            case RuntimeEvent.OnUpdateLocation(frameCount, trimMax, events) => {
-              runner.cmdQueue.add(
-                RunnerCmd.UpdateLocation(frameCount, trimMax, events)
-              );
-            }
-            case RuntimeEvent.OnPaused => {
-              runner.eventListeners.foreach(_(RunnerEvent.PausedSketch()))
-            }
-            case RuntimeEvent.OnResumed => {
-              runner.eventListeners.foreach(_(RunnerEvent.ResumedSketch()))
+        val buf = ByteBuffer.allocate(1024);
+        val sBuf = new StringBuffer();
+
+        while ({
+          try {
+            sc.read(buf) != -1
+          } catch {
+            case e: ClosedByInterruptException => {
+              runtimeCmdThread.interrupt();
+              false
             }
           }
-          sBuf.setLength(0);
-        }
+        }) {
+          buf.flip();
+          sBuf.append(StandardCharsets.UTF_8.decode(buf));
+          if (sBuf.charAt(sBuf.length() - 1) == '\n') {
+            RuntimeEvent.fromJSON(sBuf.toString()) match {
+              case RuntimeEvent.OnTargetFrameCount => {}
+              case RuntimeEvent
+                    .OnUpdateLocation(frameCount, trimMax, events) => {
+                runner.cmdQueue.add(
+                  RunnerCmd.UpdateLocation(frameCount, trimMax, events)
+                );
+              }
+              case RuntimeEvent.OnPaused => {
+                runner.eventListeners.foreach(_(RunnerEvent.PausedSketch()))
+              }
+              case RuntimeEvent.OnResumed => {
+                runner.eventListeners.foreach(_(RunnerEvent.ResumedSketch()))
+              }
+            }
+            sBuf.setLength(0);
+          }
 
-        buf.clear()
-      }
-      ()
-    }).start()
+          buf.clear()
+        }
+        ()
+      });
+      runtimeEventThread.start();
 
     try {
       while (true) {
@@ -222,8 +247,7 @@ class VmManager(
 
         for (
           cmd <- Iterator
-            .from(0)
-            .map(_ => runner.cmdQueue.poll())
+            .continually(runner.cmdQueue.poll())
             .takeWhile(_ != null)
         ) {
           cmd match {
@@ -265,6 +289,11 @@ class VmManager(
             case RunnerCmd.ResumeSketch() => {
               runtimeCmdQueue.add(RuntimeCmd.Resume());
             }
+            case RunnerCmd.Exit() => {
+              vm.exit(0);
+              runtimeEventThread.interrupt();
+              runner.eventListeners.foreach(_(RunnerEvent.Exited()));
+            }
           }
         }
 
@@ -272,6 +301,7 @@ class VmManager(
       }
     } catch {
       case e: VMDisconnectedException => {
+        runtimeEventThread.interrupt();
         println("VM is now disconnected.");
       }
       case e: Exception => {

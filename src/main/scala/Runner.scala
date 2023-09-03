@@ -62,6 +62,7 @@ enum RunnerCmd {
   );
   case PauseSketch();
   case ResumeSketch();
+  case Exit();
 }
 
 enum RunnerEvent {
@@ -69,12 +70,13 @@ enum RunnerEvent {
   case StartSketch();
   case PausedSketch();
   case ResumedSketch();
+  case Exited();
 }
 
 class Runner(val editor: JavaEditor) {
   val cmdQueue = new LinkedTransferQueue[RunnerCmd]();
   // 1つのスレッドからしかアクセスしないこと
-  var eventListeners = List[RunnerEvent => Unit]();
+  var eventListeners = Buffer[RunnerEvent => Unit]();
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -93,12 +95,12 @@ class Runner(val editor: JavaEditor) {
     ssc.bind(sockAddr);
 
     Iterator
-      .from(0)
-      .takeWhile(_ => {
+      .continually({
         val vm = new VmManager(this, ssc);
         vm.run();
         vm.continueOnExit
       })
+      .takeWhile(identity)
       .toList
 
     ()

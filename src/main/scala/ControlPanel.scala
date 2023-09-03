@@ -28,6 +28,8 @@ import scalafx.scene.layout.VBox
 import scalafx.scene.control.Button
 import scalafx.beans.property.ObjectProperty
 import scalafx.beans.property.BooleanProperty
+import javax.swing.WindowConstants
+import java.awt.event.WindowAdapter
 
 enum PlayerState {
   case Playing;
@@ -36,7 +38,7 @@ enum PlayerState {
 }
 
 object ControlPanel {
-  def show(editor: JavaEditor): Unit = {
+  def show(editor: JavaEditor) = {
     editor.statusBusy();
     editor.clearConsole();
     editor.prepareRun();
@@ -46,45 +48,57 @@ object ControlPanel {
     val runner = new Runner(editor)
     val playerState = ObjectProperty(PlayerState.Stopped);
 
-    new Thread(() => {
-      val watcher = FileSystems.getDefault().newWatchService();
-      val path = Paths.get(sketchPath);
-      path.register(
-        watcher,
-        Array[WatchEvent.Kind[?]](
-          StandardWatchEventKinds.ENTRY_CREATE,
-          StandardWatchEventKinds.ENTRY_DELETE,
-          StandardWatchEventKinds.ENTRY_MODIFY
-        ),
-        SensitivityWatchEventModifier.HIGH
-      );
+    val fileWatchThread =
+      new Thread(() => {
+        val watcher = FileSystems.getDefault().newWatchService();
+        val path = Paths.get(sketchPath);
+        path.register(
+          watcher,
+          Array[WatchEvent.Kind[?]](
+            StandardWatchEventKinds.ENTRY_CREATE,
+            StandardWatchEventKinds.ENTRY_DELETE,
+            StandardWatchEventKinds.ENTRY_MODIFY
+          ),
+          SensitivityWatchEventModifier.HIGH
+        );
 
-      while (true) {
-        val watchKey = watcher.take();
-
-        for (event <- watchKey.pollEvents().asScala) {
-          event.context() match {
-            case filename: Path => {
-              if (filename.toString().endsWith(".pde")) {
-                Platform.runLater {
-                  if (!loading.value) {
-                    loading.value = true
-                    runner.cmdQueue.add(RunnerCmd.ReloadSketch())
+        for (
+          watchKey <- Iterator
+            .continually({
+              try {
+                watcher.take()
+              } catch {
+                case e: InterruptedException => {
+                  null
+                }
+              }
+            })
+            .takeWhile(_ != null)
+        ) {
+          for (event <- watchKey.pollEvents().asScala) {
+            event.context() match {
+              case filename: Path => {
+                if (filename.toString().endsWith(".pde")) {
+                  Platform.runLater {
+                    if (!loading.value) {
+                      loading.value = true
+                      runner.cmdQueue.add(RunnerCmd.ReloadSketch())
+                    }
                   }
                 }
               }
-            }
-            case evt => {
-              println(s"unknown event: ${evt}")
+              case evt => {
+                println(s"unknown event: ${evt}")
+              }
             }
           }
-        }
 
-        if (!watchKey.reset()) {
-          throw new RuntimeException("watchKey reset failed")
+          if (!watchKey.reset()) {
+            throw new RuntimeException("watchKey reset failed")
+          }
         }
-      }
-    }).start()
+      });
+    fileWatchThread.start();
 
     SwingUtilities.invokeLater(() => {
       val frame = new JFrame("Seekprog");
@@ -92,6 +106,22 @@ object ControlPanel {
       frame.add(fxPanel);
       frame.setSize(300, 200);
       frame.setVisible(true);
+      frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+      frame.addWindowListener(new WindowAdapter() {
+        override def windowClosing(e: java.awt.event.WindowEvent) = {
+          Platform.runLater {
+            if (!loading.value) {
+              if (playerState.value != PlayerState.Stopped) {
+                loading.value = true
+                runner.cmdQueue.add(RunnerCmd.Exit());
+              } else {
+                frame.dispose();
+              }
+              fileWatchThread.interrupt();
+            }
+          }
+        }
+      });
 
       Platform.runLater(() => {
         val scene = new Scene {
@@ -112,7 +142,7 @@ object ControlPanel {
                     ()
                   })
                 };
-                runner.eventListeners = (event => {
+                runner.eventListeners += (event => {
                   Platform.runLater {
                     event match {
                       case RunnerEvent.UpdateLocation(value2, max2) => {
@@ -132,9 +162,13 @@ object ControlPanel {
                       case RunnerEvent.ResumedSketch() => {
                         loading.value = false
                       }
+                      case RunnerEvent.Exited() => {
+                        loading.value = false
+                        frame.dispose()
+                      }
                     }
                   }
-                }) :: runner.eventListeners;
+                });
 
                 children = Seq(
                   slider,
