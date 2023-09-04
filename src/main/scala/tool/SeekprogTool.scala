@@ -11,6 +11,7 @@ class SeekprogTool() extends Tool {
 
   override def init(base: Base) = {
     this.base = base
+    ControlPanel.init()
   }
 
   override def run() = {
