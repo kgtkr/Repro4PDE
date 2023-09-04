@@ -52,25 +52,25 @@ import java.nio.file.Path
 import net.kgtkr.seekprog.runtime.PdeEventWrapper
 import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
+import scala.concurrent.Promise
 
 enum EditorManagerCmd {
-  case ReloadSketch(frameCount: Option[Int] = None);
+  val done: Promise[Unit];
+
+  case ReloadSketch(done: Promise[Unit])
   case UpdateLocation(
       frameCount: Int,
-      trimMax: Boolean,
-      events: List[List[PdeEventWrapper]]
-  );
-  case PauseSketch();
-  case ResumeSketch();
-  case Exit();
+      done: Promise[Unit]
+  )
+  case StartSketch(done: Promise[Unit])
+  case PauseSketch(done: Promise[Unit])
+  case ResumeSketch(done: Promise[Unit])
+  case Exit(done: Promise[Unit])
 }
 
 enum EditorManagerEvent {
   case UpdateLocation(frameCount: Int, max: Int);
-  case StartSketch();
-  case PausedSketch();
-  case ResumedSketch();
-  case Exited();
+  case Stopped();
 }
 
 class EditorManager(val editor: JavaEditor) {
@@ -81,17 +81,45 @@ class EditorManager(val editor: JavaEditor) {
   var frameCount = 0;
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
+  var progressCmd: Option[EditorManagerCmd] = None;
 
   def run() = {
-    Iterator
-      .continually({
-        val vm = new VmManager(this);
-        vm.run();
-        vm.continueOnExit
-      })
-      .takeWhile(identity)
-      .toList
+    new Thread(() => {
+      var lastVmExitReason = VmExitReason.Reload;
+      while (lastVmExitReason != VmExitReason.Exit) {
+        assert(progressCmd.isEmpty);
+        val cmd = cmdQueue.take();
+        cmd match {
+          case cmd @ EditorManagerCmd.StartSketch(done) => {
+            progressCmd = Some(cmd);
+            Iterator
+              .continually({
+                val vm = new VmManager(this);
+                lastVmExitReason = vm.run();
+                lastVmExitReason
+              })
+              .takeWhile(_ == VmExitReason.Reload)
+              .toList
 
-    ()
+            if (lastVmExitReason == VmExitReason.Unexpected) {
+              this.eventListeners.foreach(
+                _(
+                  EditorManagerEvent.Stopped()
+                )
+              )
+            }
+          }
+          case EditorManagerCmd.Exit(done) => {
+            done.success(());
+            lastVmExitReason = VmExitReason.Exit;
+          }
+          case cmd => {
+            cmd.done.failure(new Exception("unexpected command"));
+          }
+        }
+      }
+
+      ()
+    }).start();
   }
 }

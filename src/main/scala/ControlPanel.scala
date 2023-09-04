@@ -31,6 +31,9 @@ import scalafx.beans.property.BooleanProperty
 import javax.swing.WindowConstants
 import java.awt.event.WindowAdapter
 import net.kgtkr.seekprog.ext._;
+import scala.concurrent.Promise
+import scala.util.Success
+import scala.util.Failure
 
 enum PlayerState {
   case Playing;
@@ -51,7 +54,28 @@ object ControlPanel {
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
     val loading = BooleanProperty(false);
     val editorManager = new EditorManager(editor)
+    editorManager.run()
     val playerState = ObjectProperty(PlayerState.Stopped);
+    def donePromise(onSuccess: => Unit = {}) = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+
+      val promise = Promise[Unit]();
+      promise.future.onComplete(result => {
+        Platform.runLater {
+          loading.value = false
+        }
+
+        result match {
+          case Success(_) => {
+            onSuccess
+          }
+          case Failure(e) => {
+            e.printStackTrace();
+          }
+        }
+      })
+      promise
+    }
 
     val fileWatchThread =
       new Thread(() => {
@@ -88,7 +112,7 @@ object ControlPanel {
                     if (!loading.value) {
                       loading.value = true
                       editorManager.cmdQueue.add(
-                        EditorManagerCmd.ReloadSketch()
+                        EditorManagerCmd.ReloadSketch(donePromise())
                       )
                     }
                   }
@@ -118,13 +142,13 @@ object ControlPanel {
         override def windowClosing(e: java.awt.event.WindowEvent) = {
           Platform.runLater {
             if (!loading.value) {
-              if (playerState.value != PlayerState.Stopped) {
-                loading.value = true
-                editorManager.cmdQueue.add(EditorManagerCmd.Exit());
-              } else {
-                frame.dispose();
-              }
-              fileWatchThread.interrupt();
+              loading.value = true
+              editorManager.cmdQueue.add(
+                EditorManagerCmd.Exit(donePromise {
+                  frame.dispose()
+                  fileWatchThread.interrupt();
+                })
+              );
             }
           }
         }
@@ -143,8 +167,9 @@ object ControlPanel {
                     if (oldChanging && !changing && !loading.value) {
                       loading.value = true
                       editorManager.cmdQueue.add(
-                        EditorManagerCmd.ReloadSketch(
-                          Some((value.value * 60).toInt)
+                        EditorManagerCmd.UpdateLocation(
+                          (value.value * 60).toInt,
+                          donePromise()
                         )
                       );
                     }
@@ -155,25 +180,13 @@ object ControlPanel {
                   Platform.runLater {
                     event match {
                       case EditorManagerEvent.UpdateLocation(value2, max2) => {
-                        if (!loading.value) {
-                          slider.max = max2.toDouble / 60
-                          if (!slider.valueChanging.value) {
-                            slider.value = value2.toDouble / 60
-                          }
+                        slider.max = max2.toDouble / 60
+                        if (!slider.valueChanging.value) {
+                          slider.value = value2.toDouble / 60
                         }
                       }
-                      case EditorManagerEvent.StartSketch() => {
-                        loading.value = false
-                      }
-                      case EditorManagerEvent.PausedSketch() => {
-                        loading.value = false
-                      }
-                      case EditorManagerEvent.ResumedSketch() => {
-                        loading.value = false
-                      }
-                      case EditorManagerEvent.Exited() => {
-                        loading.value = false
-                        frame.dispose()
+                      case EditorManagerEvent.Stopped() => {
+                        playerState.value = PlayerState.Stopped
                       }
                     }
                   }
@@ -210,28 +223,34 @@ object ControlPanel {
                     onAction = _ => {
                       playerState.value match {
                         case PlayerState.Playing => {
-                          playerState.value = PlayerState.Paused;
                           loading.value = true
                           editorManager.cmdQueue.add(
-                            EditorManagerCmd.PauseSketch()
+                            EditorManagerCmd.PauseSketch(donePromise {
+                              Platform.runLater {
+                                playerState.value = PlayerState.Paused;
+                              }
+                            })
                           )
                         }
                         case PlayerState.Paused => {
-                          playerState.value = PlayerState.Playing;
                           loading.value = true
                           editorManager.cmdQueue.add(
-                            EditorManagerCmd.ResumeSketch()
+                            EditorManagerCmd.ResumeSketch(donePromise {
+                              Platform.runLater {
+                                playerState.value = PlayerState.Playing;
+                              }
+                            })
                           )
                         }
                         case PlayerState.Stopped => {
-                          playerState.value = PlayerState.Playing;
                           loading.value = true
-                          new Thread(() => {
-                            editorManager.run()
-                            Platform.runLater {
-                              playerState.value = PlayerState.Stopped;
-                            }
-                          }).start()
+                          editorManager.cmdQueue.add(
+                            EditorManagerCmd.StartSketch(donePromise {
+                              Platform.runLater {
+                                playerState.value = PlayerState.Playing;
+                              }
+                            })
+                          )
                         }
                       }
                     }
