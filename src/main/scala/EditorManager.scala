@@ -49,7 +49,7 @@ import java.nio.channels.ServerSocketChannel
 import java.net.StandardProtocolFamily
 import java.nio.file.Files
 import java.nio.file.Path
-import net.kgtkr.seekprog.runtime.EventWrapper
+import net.kgtkr.seekprog.runtime.PdeEventWrapper
 import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
 
@@ -58,7 +58,7 @@ enum EditorManagerCmd {
   case UpdateLocation(
       frameCount: Int,
       trimMax: Boolean,
-      events: List[List[EventWrapper]]
+      events: List[List[PdeEventWrapper]]
   );
   case PauseSketch();
   case ResumeSketch();
@@ -80,7 +80,7 @@ class EditorManager(val editor: JavaEditor) {
 
   var frameCount = 0;
   var maxFrameCount = 0;
-  val events = Buffer[List[EventWrapper]]();
+  val pdeEvents = Buffer[List[PdeEventWrapper]]();
 
   def run() = {
     Iterator

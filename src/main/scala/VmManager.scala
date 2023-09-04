@@ -53,7 +53,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
 import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
-import net.kgtkr.seekprog.runtime.EventWrapper
+import net.kgtkr.seekprog.runtime.PdeEventWrapper
 import processing.app.RunnerListenerEdtAdapter
 import processing.mode.java.runner.Runner
 import net.kgtkr.seekprog.runtime.RuntimeCmd
@@ -245,7 +245,7 @@ class VmManager(
                       instance,
                       vm.mirrorOf(editorManager.frameCount),
                       vm.mirrorOf(
-                        editorManager.events.toList.asJson.noSpaces
+                        editorManager.pdeEvents.toList.asJson.noSpaces
                       )
                     ),
                     0
@@ -289,19 +289,21 @@ class VmManager(
                 Math.max(editorManager.maxFrameCount, frameCount);
               };
 
-              if (editorManager.maxFrameCount < editorManager.events.length) {
-                editorManager.events.trimEnd(
-                  editorManager.events.length - editorManager.maxFrameCount
+              if (
+                editorManager.maxFrameCount < editorManager.pdeEvents.length
+              ) {
+                editorManager.pdeEvents.trimEnd(
+                  editorManager.pdeEvents.length - editorManager.maxFrameCount
                 );
               } else if (
-                editorManager.maxFrameCount > editorManager.events.length
+                editorManager.maxFrameCount > editorManager.pdeEvents.length
               ) {
-                editorManager.events ++= Seq.fill(
-                  editorManager.maxFrameCount - editorManager.events.length
+                editorManager.pdeEvents ++= Seq.fill(
+                  editorManager.maxFrameCount - editorManager.pdeEvents.length
                 )(List());
               }
               for ((event, i) <- events.zipWithIndex) {
-                editorManager.events(frameCount - events.length + i) = event;
+                editorManager.pdeEvents(frameCount - events.length + i) = event;
               }
               editorManager.eventListeners.foreach(
                 _(

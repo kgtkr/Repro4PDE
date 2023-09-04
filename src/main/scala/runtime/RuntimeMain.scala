@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets
 
 object RuntimeMain {
   var targetFrameCount = 0;
-  var events: Vector[List[EventWrapper]] = Vector();
+  var events: Vector[List[PdeEventWrapper]] = Vector();
   private var socketChannel: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
   var paused = false;
@@ -36,7 +36,7 @@ object RuntimeMain {
     }
 
     this.targetFrameCount = targetFrameCount;
-    this.events = decode[List[List[EventWrapper]]](events).right.get.toVector
+    this.events = decode[List[List[PdeEventWrapper]]](events).right.get.toVector
     this.socketChannel = {
       val sockPath = Path.of(sketch.args(0));
       val sockAddr = UnixDomainSocketAddress.of(sockPath);

@@ -8,18 +8,12 @@ import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
 // nativeフィールドに入るシステムによって作られたイベントであることを示すマーカー
 object ReproductionEvent;
 
-/*
-MouseEvent(Object nativeObject,
-                    long millis, int action, int modifiers,
-                    int x, int y, int button, int count)
- */
+object PdeMouseEventWrapper {
+  implicit val encoder: Encoder[PdeMouseEventWrapper] = deriveEncoder
+  implicit val decoder: Decoder[PdeMouseEventWrapper] = deriveDecoder
 
-object MouseEventWrapper {
-  implicit val encoder: Encoder[MouseEventWrapper] = deriveEncoder
-  implicit val decoder: Decoder[MouseEventWrapper] = deriveDecoder
-
-  def fromPde(e: MouseEvent): MouseEventWrapper = {
-    MouseEventWrapper(
+  def fromPde(e: MouseEvent): PdeMouseEventWrapper = {
+    PdeMouseEventWrapper(
       e.getMillis(),
       e.getAction(),
       e.getModifiers(),
@@ -31,7 +25,7 @@ object MouseEventWrapper {
   }
 }
 
-case class MouseEventWrapper(
+case class PdeMouseEventWrapper(
     millis: Long,
     action: Int,
     modifiers: Int,
@@ -54,18 +48,12 @@ case class MouseEventWrapper(
   }
 }
 
-/*
-public KeyEvent(Object nativeObject,
-                  long millis, int action, int modifiers,
-                  char key, int keyCode, boolean isAutoRepeat)
- */
+object PdeKeyEventWrapper {
+  implicit val encoder: Encoder[PdeKeyEventWrapper] = deriveEncoder
+  implicit val decoder: Decoder[PdeKeyEventWrapper] = deriveDecoder
 
-object KeyEventWrapper {
-  implicit val encoder: Encoder[KeyEventWrapper] = deriveEncoder
-  implicit val decoder: Decoder[KeyEventWrapper] = deriveDecoder
-
-  def fromPde(e: KeyEvent): KeyEventWrapper = {
-    KeyEventWrapper(
+  def fromPde(e: KeyEvent): PdeKeyEventWrapper = {
+    PdeKeyEventWrapper(
       e.getMillis(),
       e.getAction(),
       e.getModifiers(),
@@ -76,7 +64,7 @@ object KeyEventWrapper {
   }
 }
 
-case class KeyEventWrapper(
+case class PdeKeyEventWrapper(
     millis: Long,
     action: Int,
     modifiers: Int,
@@ -97,12 +85,12 @@ case class KeyEventWrapper(
   }
 }
 
-object EventWrapper {
-  implicit val encoder: Encoder[EventWrapper] = deriveEncoder
-  implicit val decoder: Decoder[EventWrapper] = deriveDecoder
+object PdeEventWrapper {
+  implicit val encoder: Encoder[PdeEventWrapper] = deriveEncoder
+  implicit val decoder: Decoder[PdeEventWrapper] = deriveDecoder
 }
 
-enum EventWrapper {
-  case Mouse(e: MouseEventWrapper);
-  case Key(e: KeyEventWrapper);
+enum PdeEventWrapper {
+  case Mouse(e: PdeMouseEventWrapper);
+  case Key(e: PdeKeyEventWrapper);
 }

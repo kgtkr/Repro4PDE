@@ -17,11 +17,11 @@ import scala.util.Try
 class SketchHandler(
     applet: PApplet,
     targetFrameCount: Int,
-    reproductionEvents: Vector[List[EventWrapper]]
+    reproductionEvents: Vector[List[PdeEventWrapper]]
 ) {
   var onTarget = false;
-  val currentFrameEvents = Buffer[EventWrapper]();
-  val eventsBuf = Buffer[List[EventWrapper]]();
+  val currentFrameEvents = Buffer[PdeEventWrapper]();
+  val eventsBuf = Buffer[List[PdeEventWrapper]]();
   var stopReproductionEvent = false;
   var startTime = 0L;
 
@@ -48,8 +48,9 @@ class SketchHandler(
       Try(this.reproductionEvents(this.applet.frameCount - 1)).toOption
         .foreach {
           _.foreach {
-            case EventWrapper.Mouse(evt) => this.applet.postEvent(evt.toPde());
-            case EventWrapper.Key(evt)   => this.applet.postEvent(evt.toPde());
+            case PdeEventWrapper.Mouse(evt) =>
+              this.applet.postEvent(evt.toPde());
+            case PdeEventWrapper.Key(evt) => this.applet.postEvent(evt.toPde());
           };
         };
     }
@@ -75,7 +76,7 @@ class SketchHandler(
   def mouseEvent(evt: MouseEvent) = {
     if (this.onTarget) {
       this.currentFrameEvents +=
-        EventWrapper.Mouse(MouseEventWrapper.fromPde(evt));
+        PdeEventWrapper.Mouse(PdeMouseEventWrapper.fromPde(evt));
       if (evt.getNative() ne ReproductionEvent) {
         this.stopReproductionEvent = true;
       }
@@ -85,7 +86,7 @@ class SketchHandler(
   def keyEvent(evt: KeyEvent) = {
     if (this.onTarget) {
       this.currentFrameEvents +=
-        EventWrapper.Key(KeyEventWrapper.fromPde(evt));
+        PdeEventWrapper.Key(PdeKeyEventWrapper.fromPde(evt));
       if (evt.getNative() ne ReproductionEvent) {
         this.stopReproductionEvent = true;
       }
