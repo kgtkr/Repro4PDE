@@ -47,7 +47,7 @@ object ControlPanel {
     Platform.implicitExit = false;
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
     val loading = BooleanProperty(false);
-    val runner = new Runner(editor)
+    val editorManager = new EditorManager(editor)
     val playerState = ObjectProperty(PlayerState.Stopped);
 
     val fileWatchThread =
@@ -84,7 +84,9 @@ object ControlPanel {
                   Platform.runLater {
                     if (!loading.value) {
                       loading.value = true
-                      runner.cmdQueue.add(RunnerCmd.ReloadSketch())
+                      editorManager.cmdQueue.add(
+                        EditorManagerCmd.ReloadSketch()
+                      )
                     }
                   }
                 }
@@ -115,7 +117,7 @@ object ControlPanel {
             if (!loading.value) {
               if (playerState.value != PlayerState.Stopped) {
                 loading.value = true
-                runner.cmdQueue.add(RunnerCmd.Exit());
+                editorManager.cmdQueue.add(EditorManagerCmd.Exit());
               } else {
                 frame.dispose();
               }
@@ -137,17 +139,19 @@ object ControlPanel {
                   valueChanging.addListener({ (_, oldChanging, changing) =>
                     if (oldChanging && !changing && !loading.value) {
                       loading.value = true
-                      runner.cmdQueue.add(
-                        RunnerCmd.ReloadSketch(Some((value.value * 60).toInt))
+                      editorManager.cmdQueue.add(
+                        EditorManagerCmd.ReloadSketch(
+                          Some((value.value * 60).toInt)
+                        )
                       );
                     }
                     ()
                   })
                 };
-                runner.eventListeners += (event => {
+                editorManager.eventListeners += (event => {
                   Platform.runLater {
                     event match {
-                      case RunnerEvent.UpdateLocation(value2, max2) => {
+                      case EditorManagerEvent.UpdateLocation(value2, max2) => {
                         if (!loading.value) {
                           slider.max = max2.toDouble / 60
                           if (!slider.valueChanging.value) {
@@ -155,16 +159,16 @@ object ControlPanel {
                           }
                         }
                       }
-                      case RunnerEvent.StartSketch() => {
+                      case EditorManagerEvent.StartSketch() => {
                         loading.value = false
                       }
-                      case RunnerEvent.PausedSketch() => {
+                      case EditorManagerEvent.PausedSketch() => {
                         loading.value = false
                       }
-                      case RunnerEvent.ResumedSketch() => {
+                      case EditorManagerEvent.ResumedSketch() => {
                         loading.value = false
                       }
-                      case RunnerEvent.Exited() => {
+                      case EditorManagerEvent.Exited() => {
                         loading.value = false
                         frame.dispose()
                       }
@@ -205,18 +209,22 @@ object ControlPanel {
                         case PlayerState.Playing => {
                           playerState.value = PlayerState.Paused;
                           loading.value = true
-                          runner.cmdQueue.add(RunnerCmd.PauseSketch())
+                          editorManager.cmdQueue.add(
+                            EditorManagerCmd.PauseSketch()
+                          )
                         }
                         case PlayerState.Paused => {
                           playerState.value = PlayerState.Playing;
                           loading.value = true
-                          runner.cmdQueue.add(RunnerCmd.ResumeSketch())
+                          editorManager.cmdQueue.add(
+                            EditorManagerCmd.ResumeSketch()
+                          )
                         }
                         case PlayerState.Stopped => {
                           playerState.value = PlayerState.Playing;
                           loading.value = true
                           new Thread(() => {
-                            runner.run()
+                            editorManager.run()
                             Platform.runLater {
                               playerState.value = PlayerState.Stopped;
                             }

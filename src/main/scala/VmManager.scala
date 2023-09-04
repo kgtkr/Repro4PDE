@@ -55,7 +55,7 @@ import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
 import net.kgtkr.seekprog.runtime.EventWrapper
 import processing.app.RunnerListenerEdtAdapter
-import processing.mode.java.runner.Runner as PdeRunner
+import processing.mode.java.runner.Runner
 import net.kgtkr.seekprog.runtime.RuntimeCmd
 import java.nio.channels.ClosedByInterruptException
 import java.nio.file.Files
@@ -65,7 +65,7 @@ import java.net.StandardProtocolFamily
 import net.kgtkr.seekprog.ext._;
 
 class VmManager(
-    val runner: Runner
+    val editorManager: EditorManager
 ) {
   var continueOnExit = false
   def run() = {
@@ -79,7 +79,7 @@ class VmManager(
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
 
-    val sketch = runner.editor.getSketch();
+    val sketch = editorManager.editor.getSketch();
     val build = new JavaBuild(sketch);
     val toolDir = new File(
       new File(
@@ -90,8 +90,8 @@ class VmManager(
       "tool"
     );
     val mainClassName = build.build(true);
-    val pdeRunner =
-      new PdeRunner(build, new RunnerListenerEdtAdapter(runner.editor));
+    val runner =
+      new Runner(build, new RunnerListenerEdtAdapter(editorManager.editor));
 
     val cp = toolDir
       .listFiles()
@@ -107,14 +107,14 @@ class VmManager(
     );
 
     val vm =
-      pdeRunner.debug(Array(sockPath.toString()));
+      runner.debug(Array(sockPath.toString()));
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();
     classPrepareRequest.addClassFilter(mainClassName);
     classPrepareRequest.enable();
 
-    runner.eventListeners.foreach(_(RunnerEvent.StartSketch()))
+    editorManager.eventListeners.foreach(_(EditorManagerEvent.StartSketch()))
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
 
@@ -161,15 +161,19 @@ class VmManager(
               case RuntimeEvent.OnTargetFrameCount => {}
               case RuntimeEvent
                     .OnUpdateLocation(frameCount, trimMax, events) => {
-                runner.cmdQueue.add(
-                  RunnerCmd.UpdateLocation(frameCount, trimMax, events)
+                editorManager.cmdQueue.add(
+                  EditorManagerCmd.UpdateLocation(frameCount, trimMax, events)
                 );
               }
               case RuntimeEvent.OnPaused => {
-                runner.eventListeners.foreach(_(RunnerEvent.PausedSketch()))
+                editorManager.eventListeners.foreach(
+                  _(EditorManagerEvent.PausedSketch())
+                )
               }
               case RuntimeEvent.OnResumed => {
-                runner.eventListeners.foreach(_(RunnerEvent.ResumedSketch()))
+                editorManager.eventListeners.foreach(
+                  _(EditorManagerEvent.ResumedSketch())
+                )
               }
             }
             sBuf.setLength(0);
@@ -239,9 +243,9 @@ class VmManager(
                       .get(0),
                     Arrays.asList(
                       instance,
-                      vm.mirrorOf(runner.frameCount),
+                      vm.mirrorOf(editorManager.frameCount),
                       vm.mirrorOf(
-                        runner.events.toList.asJson.noSpaces
+                        editorManager.events.toList.asJson.noSpaces
                       )
                     ),
                     0
@@ -261,52 +265,65 @@ class VmManager(
 
         for (
           cmd <- Iterator
-            .continually(Option(runner.cmdQueue.poll()))
+            .continually(Option(editorManager.cmdQueue.poll()))
             .mapWhile(identity)
         ) {
           cmd match {
-            case RunnerCmd.ReloadSketch(frameCount) => {
+            case EditorManagerCmd.ReloadSketch(frameCount) => {
               println("Reloading sketch...");
               frameCount.foreach { frameCount =>
-                runner.frameCount = frameCount
+                editorManager.frameCount = frameCount
               }
               vm.exit(0);
               this.continueOnExit = true;
             }
-            case RunnerCmd.UpdateLocation(frameCount, trimMax, events) => {
-              runner.frameCount = frameCount;
-              runner.maxFrameCount = if (trimMax) {
+            case EditorManagerCmd.UpdateLocation(
+                  frameCount,
+                  trimMax,
+                  events
+                ) => {
+              editorManager.frameCount = frameCount;
+              editorManager.maxFrameCount = if (trimMax) {
                 frameCount
               } else {
-                Math.max(runner.maxFrameCount, frameCount);
+                Math.max(editorManager.maxFrameCount, frameCount);
               };
 
-              if (runner.maxFrameCount < runner.events.length) {
-                runner.events.trimEnd(
-                  runner.events.length - runner.maxFrameCount
+              if (editorManager.maxFrameCount < editorManager.events.length) {
+                editorManager.events.trimEnd(
+                  editorManager.events.length - editorManager.maxFrameCount
                 );
-              } else if (runner.maxFrameCount > runner.events.length) {
-                runner.events ++= Seq.fill(
-                  runner.maxFrameCount - runner.events.length
+              } else if (
+                editorManager.maxFrameCount > editorManager.events.length
+              ) {
+                editorManager.events ++= Seq.fill(
+                  editorManager.maxFrameCount - editorManager.events.length
                 )(List());
               }
               for ((event, i) <- events.zipWithIndex) {
-                runner.events(frameCount - events.length + i) = event;
+                editorManager.events(frameCount - events.length + i) = event;
               }
-              runner.eventListeners.foreach(
-                _(RunnerEvent.UpdateLocation(frameCount, runner.maxFrameCount))
+              editorManager.eventListeners.foreach(
+                _(
+                  EditorManagerEvent.UpdateLocation(
+                    frameCount,
+                    editorManager.maxFrameCount
+                  )
+                )
               )
             }
-            case RunnerCmd.PauseSketch() => {
+            case EditorManagerCmd.PauseSketch() => {
               runtimeCmdQueue.add(RuntimeCmd.Pause());
             }
-            case RunnerCmd.ResumeSketch() => {
+            case EditorManagerCmd.ResumeSketch() => {
               runtimeCmdQueue.add(RuntimeCmd.Resume());
             }
-            case RunnerCmd.Exit() => {
+            case EditorManagerCmd.Exit() => {
               vm.exit(0);
               runtimeEventThread.interrupt();
-              runner.eventListeners.foreach(_(RunnerEvent.Exited()));
+              editorManager.eventListeners.foreach(
+                _(EditorManagerEvent.Exited())
+              );
             }
           }
         }

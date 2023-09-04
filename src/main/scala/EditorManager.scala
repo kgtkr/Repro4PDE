@@ -53,7 +53,7 @@ import net.kgtkr.seekprog.runtime.EventWrapper
 import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
 
-enum RunnerCmd {
+enum EditorManagerCmd {
   case ReloadSketch(frameCount: Option[Int] = None);
   case UpdateLocation(
       frameCount: Int,
@@ -65,7 +65,7 @@ enum RunnerCmd {
   case Exit();
 }
 
-enum RunnerEvent {
+enum EditorManagerEvent {
   case UpdateLocation(frameCount: Int, max: Int);
   case StartSketch();
   case PausedSketch();
@@ -73,10 +73,10 @@ enum RunnerEvent {
   case Exited();
 }
 
-class Runner(val editor: JavaEditor) {
-  val cmdQueue = new LinkedTransferQueue[RunnerCmd]();
+class EditorManager(val editor: JavaEditor) {
+  val cmdQueue = new LinkedTransferQueue[EditorManagerCmd]();
   // 1つのスレッドからしかアクセスしないこと
-  var eventListeners = Buffer[RunnerEvent => Unit]();
+  var eventListeners = Buffer[EditorManagerEvent => Unit]();
 
   var frameCount = 0;
   var maxFrameCount = 0;
