@@ -62,6 +62,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.net.UnixDomainSocketAddress
 import java.net.StandardProtocolFamily
+import net.kgtkr.seekprog.ext._;
 
 class VmManager(
     val runner: Runner
@@ -126,14 +127,14 @@ class VmManager(
             cmd <- Iterator
               .continually({
                 try {
-                  runtimeCmdQueue.take()
+                  Some(runtimeCmdQueue.take())
                 } catch {
                   case e: InterruptedException => {
-                    null
+                    None
                   }
                 }
               })
-              .takeWhile(_ != null)
+              .mapWhile(identity)
           ) {
             sc.write(cmd.toBytes());
           }
@@ -260,8 +261,8 @@ class VmManager(
 
         for (
           cmd <- Iterator
-            .continually(runner.cmdQueue.poll())
-            .takeWhile(_ != null)
+            .continually(Option(runner.cmdQueue.poll()))
+            .mapWhile(identity)
         ) {
           cmd match {
             case RunnerCmd.ReloadSketch(frameCount) => {

@@ -30,6 +30,7 @@ import scalafx.beans.property.ObjectProperty
 import scalafx.beans.property.BooleanProperty
 import javax.swing.WindowConstants
 import java.awt.event.WindowAdapter
+import net.kgtkr.seekprog.ext._;
 
 enum PlayerState {
   case Playing;
@@ -67,14 +68,14 @@ object ControlPanel {
           watchKey <- Iterator
             .continually({
               try {
-                watcher.take()
+                Some(watcher.take())
               } catch {
                 case e: InterruptedException => {
-                  null
+                  None
                 }
               }
             })
-            .takeWhile(_ != null)
+            .mapWhile(identity)
         ) {
           for (event <- watchKey.pollEvents().asScala) {
             event.context() match {
