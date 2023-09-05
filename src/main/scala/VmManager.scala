@@ -120,6 +120,10 @@ class VmManager(
     classPrepareRequest.addClassFilter(build.getSketchClassName());
     classPrepareRequest.enable();
 
+    val exceptionRequest =
+      vm.eventRequestManager().createExceptionRequest(null, false, true);
+    exceptionRequest.enable();
+
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
     val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
 
@@ -246,6 +250,9 @@ class VmManager(
                   )
               }
 
+            }
+            case evt: ExceptionEvent => {
+              runner.exceptionEvent(evt);
             }
             case _ => {}
           }
