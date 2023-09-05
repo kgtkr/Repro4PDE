@@ -141,15 +141,12 @@ object ControlPanel {
       frame.addWindowListener(new WindowAdapter() {
         override def windowClosing(e: java.awt.event.WindowEvent) = {
           Platform.runLater {
-            if (!loading.value) {
-              loading.value = true
-              editorManager.cmdQueue.add(
-                EditorManagerCmd.Exit(donePromise {
-                  frame.dispose()
-                  fileWatchThread.interrupt();
-                })
-              );
-            }
+            loading.value = true
+            editorManager.cmdQueue.add(
+              EditorManagerCmd.Exit(donePromise())
+            );
+            frame.dispose()
+            fileWatchThread.interrupt();
           }
         }
       });
