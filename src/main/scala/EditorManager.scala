@@ -95,14 +95,30 @@ class EditorManager(val editor: JavaEditor) {
           case cmd @ EditorManagerCmd.StartSketch(done) => {
             progressCmd = Some(cmd);
             running = true;
+            editor.statusEmpty();
+            editor.activateRun();
             Iterator
               .continually({
-                if (lastVmExitReason == VmExitReason.Reload) {
-                  build = new JavaBuild(editor.getSketch());
-                  build.build(true);
+                try {
+                  if (lastVmExitReason != VmExitReason.UpdateLocation) {
+                    editor.prepareRun();
+                    val build = new JavaBuild(editor.getSketch());
+                    build.build(true);
+                    this.build = build;
+                  }
+
+                  val vm = new VmManager(this);
+                  lastVmExitReason = vm.run();
+                } catch {
+                  case e: Exception => {
+                    e.printStackTrace();
+                    editor.statusError(e);
+                    lastVmExitReason = VmExitReason.Unexpected;
+                  }
+                } finally {
+                  editor.deactivateRun();
                 }
-                val vm = new VmManager(this);
-                lastVmExitReason = vm.run();
+
                 lastVmExitReason
               })
               .takeWhile(reason =>

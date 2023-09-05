@@ -47,10 +47,6 @@ object ControlPanel {
   }
 
   def show(editor: JavaEditor) = {
-    editor.statusBusy();
-    editor.clearConsole();
-    editor.prepareRun();
-    editor.activateRun();
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
     val loading = BooleanProperty(false);
     val editorManager = new EditorManager(editor)
