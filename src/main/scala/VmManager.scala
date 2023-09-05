@@ -271,13 +271,27 @@ class VmManager(
                 vm.exit(0);
                 exitReason = VmExitReason.Reload;
               }
-              case EditorManagerCmd.PauseSketch(_) => {
-                runtimeCmdQueue.add(RuntimeCmd.Pause());
+              case EditorManagerCmd.PauseSketch(done) => {
+                if (!editorManager.running) {
+                  editorManager.progressCmd = None;
+                  done.failure(new Exception("already paused"));
+                } else {
+                  runtimeCmdQueue.add(RuntimeCmd.Pause());
+                  editorManager.running = false;
+                }
+
               }
-              case EditorManagerCmd.ResumeSketch(_) => {
-                runtimeCmdQueue.add(RuntimeCmd.Resume());
+              case EditorManagerCmd.ResumeSketch(done) => {
+                if (editorManager.running) {
+                  editorManager.progressCmd = None;
+                  done.failure(new Exception("already running"));
+                } else {
+                  runtimeCmdQueue.add(RuntimeCmd.Resume());
+                  editorManager.running = true;
+                }
               }
               case EditorManagerCmd.Exit(done) => {
+                editorManager.running = false;
                 vm.exit(0);
                 runtimeEventThread.interrupt();
                 exitReason = VmExitReason.Exit;

@@ -82,6 +82,7 @@ class EditorManager(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var progressCmd: Option[EditorManagerCmd] = None;
+  var running = false;
 
   def run() = {
     new Thread(() => {
@@ -92,6 +93,7 @@ class EditorManager(val editor: JavaEditor) {
         cmd match {
           case cmd @ EditorManagerCmd.StartSketch(done) => {
             progressCmd = Some(cmd);
+            running = true;
             Iterator
               .continually({
                 val vm = new VmManager(this);
@@ -110,6 +112,7 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManagerCmd.Exit(done) => {
+            running = false;
             done.success(());
             lastVmExitReason = VmExitReason.Exit;
           }
