@@ -227,7 +227,7 @@ class VmManager(
                   RuntimeMainClassType.invokeMethod(
                     evt.thread(),
                     RuntimeMainClassType
-                      .methodsByName("run")
+                      .methodsByName("init")
                       .get(0),
                     Arrays.asList(
                       instance,

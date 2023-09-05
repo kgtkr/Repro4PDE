@@ -26,7 +26,7 @@ object RuntimeMain {
   val resumeQueue = new LinkedTransferQueue[Unit]();
   val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
 
-  def run(sketch: PApplet, targetFrameCount: Int, events: String) = {
+  def init(sketch: PApplet, targetFrameCount: Int, events: String) = {
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
     Class.forName(renderer);
     {
