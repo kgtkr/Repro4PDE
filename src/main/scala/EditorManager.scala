@@ -102,7 +102,7 @@ class EditorManager(val editor: JavaEditor) {
               })
               .takeWhile(_ == VmExitReason.Reload)
               .toList
-
+            running = false;
             if (lastVmExitReason == VmExitReason.Unexpected) {
               this.eventListeners.foreach(
                 _(
