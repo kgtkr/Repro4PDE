@@ -212,7 +212,7 @@ object ControlPanel {
                   new Button {
                     text <== Bindings.createStringBinding(
                       () =>
-                        if (playerState.value != PlayerState.Stopped) {
+                        if (playerState.value == PlayerState.Playing) {
                           "⏸"
                         } else {
                           "▶"
