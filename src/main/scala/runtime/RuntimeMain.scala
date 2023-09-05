@@ -16,6 +16,7 @@ import scala.util.Try
 import java.util.concurrent.LinkedTransferQueue
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import processing.core.PConstants
 
 object RuntimeMain {
   var targetFrameCount = 0;
@@ -88,6 +89,10 @@ object RuntimeMain {
       RuntimeMain.targetFrameCount,
       RuntimeMain.events
     );
+
+    sketch.registerMethod("pre", sketchHandler);
+    sketch.registerMethod("mouseEvent", sketchHandler);
+    sketch.registerMethod("keyEvent", sketchHandler);
   }
 }
 

@@ -28,6 +28,15 @@ class SketchHandler(
   def pre() = {
     if (this.applet.frameCount == 1) {
       this.startTime = System.nanoTime();
+
+      if (
+        applet
+          .sketchRenderer() != classOf[PGraphicsJava2DRuntime].getName()
+      ) {
+        throw new RuntimeException(
+          "Seekprog not support renderer settings. size() must be two arguments."
+        );
+      }
     }
 
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {

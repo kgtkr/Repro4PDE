@@ -15,6 +15,7 @@ import scala.collection.mutable.Buffer
 import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
 import scala.util.Try
+import processing.core.PConstants
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   override def createThread(): Thread = {
@@ -39,12 +40,23 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
       sketch.start();
       while ((Thread.currentThread() eq thread) && !sketch.finished) {
         checkPause();
-        if (sketch.frameCount == 0) {
-          sketch.registerMethod("pre", RuntimeMain.sketchHandler);
-          sketch.registerMethod("mouseEvent", RuntimeMain.sketchHandler);
-          sketch.registerMethod("keyEvent", RuntimeMain.sketchHandler);
-        }
         callDraw();
+        if (PSurfaceAWTRuntime.this.frameRateTarget != 60) {
+          throw new RuntimeException(
+            "Seekprog only supports 60fps"
+          );
+        }
+        if (sketch.finished && !sketch.exitCalled) {
+          throw new RuntimeException(
+            "Seekprog must implement draw()"
+          );
+        }
+        if (!sketch.isLooping) {
+          throw new RuntimeException(
+            "Seekprog does not support noLoop()"
+          );
+        }
+
         if (RuntimeMain.sketchHandler.onTarget) {
           if (RuntimeMain.paused) {
             if (RuntimeMain.notTriggerPausedEvent) {
