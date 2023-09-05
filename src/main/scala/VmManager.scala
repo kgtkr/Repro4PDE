@@ -234,7 +234,8 @@ class VmManager(
                       vm.mirrorOf(editorManager.frameCount),
                       vm.mirrorOf(
                         editorManager.pdeEvents.toList.asJson.noSpaces
-                      )
+                      ),
+                      vm.mirrorOf(!editorManager.running)
                     ),
                     0
                   );

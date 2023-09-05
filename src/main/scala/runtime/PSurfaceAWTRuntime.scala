@@ -47,9 +47,14 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
         callDraw();
         if (RuntimeMain.sketchHandler.onTarget) {
           if (RuntimeMain.paused) {
-            RuntimeMain.runtimeEventQueue.add(
-              RuntimeEvent.OnPaused
-            );
+            if (RuntimeMain.notTriggerPausedEvent) {
+              RuntimeMain.notTriggerPausedEvent = false;
+            } else {
+              RuntimeMain.runtimeEventQueue.add(
+                RuntimeEvent.OnPaused
+              );
+            }
+
             RuntimeMain.resumeQueue.take();
             RuntimeMain.runtimeEventQueue.add(
               RuntimeEvent.OnResumed
