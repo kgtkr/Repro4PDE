@@ -66,6 +66,7 @@ import net.kgtkr.seekprog.ext._;
 
 enum VmExitReason {
   case Reload;
+  case UpdateLocation;
   case Exit;
   case Unexpected;
 }
@@ -86,8 +87,6 @@ class VmManager(
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
 
-    val sketch = editorManager.editor.getSketch();
-    val build = new JavaBuild(sketch);
     val toolDir = new File(
       new File(
         Base
@@ -96,7 +95,7 @@ class VmManager(
       ),
       "tool"
     );
-    val mainClassName = build.build(true);
+    val build = editorManager.build;
     val runner =
       new Runner(build, new RunnerListenerEdtAdapter(editorManager.editor));
 
@@ -118,7 +117,7 @@ class VmManager(
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();
-    classPrepareRequest.addClassFilter(mainClassName);
+    classPrepareRequest.addClassFilter(build.getSketchClassName());
     classPrepareRequest.enable();
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
@@ -183,7 +182,7 @@ class VmManager(
           evt match {
             case evt: ClassPrepareEvent => {
               val classType = evt.referenceType().asInstanceOf[ClassType];
-              if (classType.name() == mainClassName) {
+              if (classType.name() == build.getSketchClassName()) {
                 vm.eventRequestManager()
                   .createBreakpointRequest(
                     classType.methodsByName("settings").get(0).location()
@@ -270,7 +269,7 @@ class VmManager(
                 println("UpdateLocation sketch...");
                 editorManager.frameCount = frameCount
                 vm.exit(0);
-                exitReason = VmExitReason.Reload;
+                exitReason = VmExitReason.UpdateLocation;
               }
               case EditorManagerCmd.PauseSketch(done) => {
                 if (!editorManager.running) {

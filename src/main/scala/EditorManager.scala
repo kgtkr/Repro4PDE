@@ -83,10 +83,11 @@ class EditorManager(val editor: JavaEditor) {
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var progressCmd: Option[EditorManagerCmd] = None;
   var running = false;
+  var build: JavaBuild = null;
+  var lastVmExitReason = VmExitReason.Reload;
 
   def run() = {
     new Thread(() => {
-      var lastVmExitReason = VmExitReason.Reload;
       while (lastVmExitReason != VmExitReason.Exit) {
         assert(progressCmd.isEmpty);
         val cmd = cmdQueue.take();
@@ -96,14 +97,24 @@ class EditorManager(val editor: JavaEditor) {
             running = true;
             Iterator
               .continually({
+                if (lastVmExitReason == VmExitReason.Reload) {
+                  build = new JavaBuild(editor.getSketch());
+                  build.build(true);
+                }
                 val vm = new VmManager(this);
                 lastVmExitReason = vm.run();
                 lastVmExitReason
               })
-              .takeWhile(_ == VmExitReason.Reload)
+              .takeWhile(reason =>
+                reason == VmExitReason.Reload || reason == VmExitReason.UpdateLocation
+              )
               .toList
             running = false;
             if (lastVmExitReason == VmExitReason.Unexpected) {
+              progressCmd.foreach(
+                _.done.failure(new Exception("unexpected vm exit"))
+              );
+              progressCmd = None;
               this.eventListeners.foreach(
                 _(
                   EditorManagerEvent.Stopped()
