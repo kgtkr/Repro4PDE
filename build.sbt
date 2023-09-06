@@ -7,7 +7,10 @@ lazy val processingCp = Def.setting(
       .map(name => baseDirectory.value / name.trim)
   )
 )
-lazy val buildTool = taskKey[File]("Build as processing tool")
+lazy val buildTool =
+  taskKey[File]("Build as processing tool for development")
+lazy val buildToolProd =
+  taskKey[File]("Build as processing tool for production")
 
 lazy val root = project
   .in(file("."))
@@ -61,5 +64,34 @@ lazy val root = project
       }
 
       distDir
+    },
+    buildToolProd := {
+      val buildToolResult = buildTool.value;
+      val srcDir = (Compile / sourceDirectory).value;
+      val docDir = (Compile / doc).value;
+      val zipDist = baseDirectory.value / "Seekprog.zip";
+
+      IO.withTemporaryDirectory(tmpDir => {
+        val distDir = tmpDir / "Seekprog";
+        IO.copyDirectory(
+          buildToolResult,
+          distDir
+        )
+
+        IO.copyDirectory(
+          srcDir,
+          distDir / "src"
+        )
+
+        (distDir / "examples").mkdir()
+        IO.copyDirectory(
+          docDir,
+          distDir / "reference"
+        )
+
+        IO.zip(Path.allSubpaths(distDir), zipDist, None)
+      });
+
+      zipDist
     }
   )

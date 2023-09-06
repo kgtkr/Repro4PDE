@@ -38,4 +38,6 @@ metals.sbt
 /lib
 /pdedist/
 /tooldist/
+/tooldist/
 .env.local
+Seekprog.zip
