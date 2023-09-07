@@ -1,11 +1,11 @@
-package net.kgtkr.seekprog.dev;
+package net.kgtkr.seekprog.codegen;
 
 import processing.core.PGraphics
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.io.File
 
-// sbt runMain Codegen
-@main def Codegen() = {
+@main def Codegen(rootDir: String, packageName: String, className: String) = {
   def toScalaType(c: Class[?]): String = {
     if (c.isArray()) {
       s"Array[${toScalaType(c.getComponentType())}]"
@@ -21,13 +21,12 @@ import java.nio.file.Paths
     }
   }
 
-  var src = """
-    // generated
-    package net.kgtkr.seekprog.runtime;
+  var src = f"""
+    package ${packageName};
 
     import processing.awt.PGraphicsJava2D
 
-    class PGraphicsJava2DDummyImpl extends PGraphicsJava2D { 
+    class ${className} extends PGraphicsJava2D { 
     """ +
     classOf[PGraphics]
       .getDeclaredMethods()
@@ -35,7 +34,7 @@ import java.nio.file.Paths
       .filter(_.getName().endsWith("Impl"))
       .filter(_.getName() != "textWidthImpl")
       .map(method =>
-        s"""
+        f"""
       override def ${method.getName()}(${method
             .getParameters()
             .map(p => s"${p.getName()}: ${toScalaType(p.getType())}")
@@ -52,9 +51,11 @@ import java.nio.file.Paths
       .mkString("\n") +
     "}";
 
+  val dir = Paths.get(rootDir, packageName.replace(".", File.separator));
+  val file = dir.resolve(s"${className}.scala");
+  Files.createDirectories(dir);
   Files.write(
-    Paths.get("src/main/scala/runtime/PGraphicsJava2DDummyImpl.scala"),
+    file,
     src.getBytes()
   );
-
 }

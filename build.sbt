@@ -1,26 +1,43 @@
-val scala3Version = "3.3.0"
+import java.io.File;
+
 lazy val processingCp = Def.setting(
   Attributed.blankSeq(
     IO
       .read(file("cache/classpath.txt"))
       .split(":")
-      .map(name => baseDirectory.value / name.trim)
+      .map(name => file(".") / name.trim)
   )
 )
 lazy val buildTool =
   taskKey[File]("Build as processing tool for development")
 lazy val buildToolProd =
   taskKey[File]("Build as processing tool for production")
+lazy val codegen = taskKey[Seq[File]]("codegen")
+
+lazy val sharedSettings = Seq(
+  scalaVersion := "3.3.0",
+  Compile / unmanagedJars ++= processingCp.value
+);
+
+lazy val codegenProject = project
+  .in(file("codegen"))
+  .settings(sharedSettings)
+  .settings(
+    name := "seekprog-codegen",
+    scalacOptions ++= Seq(
+      "-no-indent"
+    )
+  );
 
 lazy val root = project
   .in(file("."))
+  .dependsOn(codegenProject)
+  .settings(sharedSettings)
   .settings(
     name := "seekprog",
     version := "0.1.0-SNAPSHOT",
-    scalaVersion := scala3Version,
     run / fork := true,
     connectInput := true,
-    Compile / unmanagedJars ++= processingCp.value,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "org.scalafx" %% "scalafx" % "20.0.0-R31"
@@ -30,9 +47,26 @@ lazy val root = project
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser"
     ).map(_ % "0.14.5"),
-    scalacOptions ++= Seq(
-      "-no-indent"
-    ),
+    Compile / sourceGenerators += codegen,
+    codegen := {
+      val rootDir = sourceManaged.value / "main"
+      val cp = (Compile / dependencyClasspath).value
+      val r = (Compile / runner).value
+      val s = streams.value
+      val packageName =
+        "net.kgtkr.seekprog.runtime"
+      val className = "PGraphicsJava2DDummyImpl";
+      r.run(
+        "net.kgtkr.seekprog.codegen.Codegen",
+        cp.files,
+        Array(rootDir.getAbsolutePath(), packageName, className),
+        s.log
+      ).get
+      Seq(
+        rootDir / packageName
+          .replace(".", File.separator) / s"${className}.scala"
+      )
+    },
     buildTool := {
       val distDir = baseDirectory.value / "tooldist"
       if (distDir.exists()) distDir.delete()
