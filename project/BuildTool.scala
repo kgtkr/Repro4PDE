@@ -51,7 +51,7 @@ object BuildTool {
       dir / "reference"
     )
 
-    IO.zip(Path.allSubpaths(dir), dist, None)
+    IO.zip(Path.allSubpaths(dir.getParentFile()), dist, None)
 
     dist
   }
