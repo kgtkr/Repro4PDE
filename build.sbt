@@ -49,23 +49,18 @@ lazy val root = project
     ).map(_ % "0.14.5"),
     Compile / sourceGenerators += codegen,
     codegen := {
-      val rootDir = sourceManaged.value / "main"
+      val rootDir = sourceManaged.value / "seekprog"
+      IO.delete(rootDir)
       val cp = (Compile / dependencyClasspath).value
       val r = (Compile / runner).value
       val s = streams.value
-      val packageName =
-        "net.kgtkr.seekprog.runtime"
-      val className = "PGraphicsJava2DDummyImpl";
       r.run(
         "net.kgtkr.seekprog.codegen.Codegen",
         cp.files,
-        Array(rootDir.getAbsolutePath(), packageName, className),
+        Array(rootDir.getAbsolutePath()),
         s.log
-      ).get
-      Seq(
-        rootDir / packageName
-          .replace(".", File.separator) / s"${className}.scala"
-      )
+      ).failed foreach (sys error _.getMessage)
+      (rootDir ** "*.scala").get
     },
     buildTool := {
       val distDir = baseDirectory.value / "tooldist"

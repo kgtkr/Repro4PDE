@@ -5,7 +5,9 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.io.File
 
-@main def Codegen(rootDir: String, packageName: String, className: String) = {
+@main def Codegen(dirPath: String) = {
+  val className = "PGraphicsJava2DDummyImpl";
+
   def toScalaType(c: Class[?]): String = {
     if (c.isArray()) {
       s"Array[${toScalaType(c.getComponentType())}]"
@@ -22,7 +24,7 @@ import java.io.File
   }
 
   var src = f"""
-    package ${packageName};
+    package net.kgtkr.seekprog.runtime;
 
     import processing.awt.PGraphicsJava2D
 
@@ -51,7 +53,7 @@ import java.io.File
       .mkString("\n") +
     "}";
 
-  val dir = Paths.get(rootDir, packageName.replace(".", File.separator));
+  val dir = Paths.get(dirPath);
   val file = dir.resolve(s"${className}.scala");
   Files.createDirectories(dir);
   Files.write(
