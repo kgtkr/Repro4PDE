@@ -34,7 +34,6 @@ metals.sbt
 #
 *.class
 *.jar
-/cache/
 /lib
 /pdedist/
 /tooldist/

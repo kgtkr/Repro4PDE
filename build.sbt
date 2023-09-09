@@ -1,13 +1,3 @@
-import java.io.File;
-
-lazy val processingCp = Def.setting(
-  Attributed.blankSeq(
-    IO
-      .read(file("cache/classpath.txt"))
-      .split(":")
-      .map(name => file(".") / name.trim)
-  )
-)
 lazy val buildTool =
   taskKey[File]("Build as processing tool for development")
 lazy val buildToolProd =
@@ -15,7 +5,7 @@ lazy val buildToolProd =
 
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.0",
-  Compile / unmanagedJars ++= processingCp.value
+  Compile / unmanagedJars ++= Processing.processingCpTask.value
 );
 
 lazy val codegenProject = project
@@ -79,7 +69,8 @@ lazy val root = project
           (Compile / packageBin).value,
           toolDir / "Seekprog.jar"
         )
-      val exclude = processingCp.value.map(_.data.getPath()).toSet
+      val exclude =
+        Processing.processingCpTask.value.map(_.getPath()).toSet
       for (
         file <- (Compile / dependencyClasspathAsJars).value
           .filterNot(jar => exclude.contains(jar.data.getPath()))
