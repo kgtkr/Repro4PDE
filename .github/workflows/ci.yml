@@ -36,7 +36,7 @@ jobs:
           name: Seekprog
       - run: |
           mkdir pages
-          cp target/scala-3.3.0/Seekprog.zip pages/
+          cp Seekprog.zip pages/
           cp tool.properties pages/Seekprog.txt
       - uses: actions/upload-pages-artifact@v2
         with:
