@@ -63,6 +63,7 @@ import java.nio.file.Path
 import java.net.UnixDomainSocketAddress
 import java.net.StandardProtocolFamily
 import net.kgtkr.seekprog.ext._;
+import net.kgtkr.seekprog.tool.SeekprogTool
 
 enum VmExitReason {
   case Reload;
@@ -91,7 +92,7 @@ class VmManager(
       new File(
         Base
           .getSketchbookToolsFolder(),
-        "Seekprog"
+        SeekprogTool.toolName
       ),
       "tool"
     );

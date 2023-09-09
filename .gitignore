@@ -32,11 +32,4 @@ metals.sbt
 /.worksheet/
 
 #
-*.class
-*.jar
-/lib
-/pdedist/
-/tooldist/
-/tooldist/
-.env.local
-Seekprog.zip
+/dev.properties

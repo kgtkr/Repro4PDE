@@ -29,7 +29,8 @@ class Seekprog() extends Tool {
         javaModeLoader
       )
       .loadClass(classOf[Seekprog].getName() + "Tool")
-      .newInstance()
+      .getConstructor(classOf[String])
+      .newInstance(this.getClass().getSimpleName())
       .asInstanceOf[Tool]
     this.tool.init(base)
   }

@@ -1,7 +1,7 @@
+lazy val deployToolDev =
+  taskKey[Unit]("Build as processing tool and deploy for development")
 lazy val buildTool =
-  taskKey[File]("Build as processing tool for development")
-lazy val buildToolProd =
-  taskKey[File]("Build as processing tool for production")
+  taskKey[File]("Build as processing tool")
 
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.0",
@@ -50,66 +50,6 @@ lazy val root = project
       ).failed foreach (sys error _.getMessage)
       (rootDir ** "*.scala").get
     },
-    buildTool := {
-      val distDir = baseDirectory.value / "tooldist"
-      if (distDir.exists()) distDir.delete()
-      distDir.mkdir()
-
-      val toolProperties = distDir / "tool.properties"
-      IO.copyFile(
-        baseDirectory.value / "tool.properties",
-        toolProperties
-      )
-
-      val toolDir = distDir / "tool"
-      toolDir.mkdir()
-
-      val jarDir =
-        IO.copyFile(
-          (Compile / packageBin).value,
-          toolDir / "Seekprog.jar"
-        )
-      val exclude =
-        Processing.processingCpTask.value.map(_.getPath()).toSet
-      for (
-        file <- (Compile / dependencyClasspathAsJars).value
-          .filterNot(jar => exclude.contains(jar.data.getPath()))
-      ) {
-        IO.copyFile(
-          file.data,
-          toolDir / file.data.getName()
-        )
-      }
-
-      distDir
-    },
-    buildToolProd := {
-      val buildToolResult = buildTool.value;
-      val srcDir = (Compile / sourceDirectory).value;
-      val docDir = (Compile / doc).value;
-      val zipDist = baseDirectory.value / "Seekprog.zip";
-
-      IO.withTemporaryDirectory(tmpDir => {
-        val distDir = tmpDir / "Seekprog";
-        IO.copyDirectory(
-          buildToolResult,
-          distDir
-        )
-
-        IO.copyDirectory(
-          srcDir,
-          distDir / "src"
-        )
-
-        (distDir / "examples").mkdir()
-        IO.copyDirectory(
-          docDir,
-          distDir / "reference"
-        )
-
-        IO.zip(Path.allSubpaths(distDir), zipDist, None)
-      });
-
-      zipDist
-    }
+    buildTool := BuildTool.buildTool.value,
+    deployToolDev := BuildTool.deployToolDev.value
   )
