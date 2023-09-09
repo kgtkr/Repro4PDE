@@ -2,10 +2,15 @@ lazy val deployToolDev =
   taskKey[Unit]("Build as processing tool and deploy for development")
 lazy val buildTool =
   taskKey[File]("Build as processing tool")
+lazy val codegenSeekprog =
+  taskKey[Seq[File]]("Seekprog codegen")
 
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.0",
-  Compile / unmanagedJars ++= Processing.processingCpTask.value
+  Compile / unmanagedJars ++= Processing.processingCpTask.value,
+  scalacOptions ++= Seq(
+    "-no-indent"
+  )
 );
 
 lazy val codegenProject = project
@@ -13,14 +18,27 @@ lazy val codegenProject = project
   .settings(sharedSettings)
   .settings(
     name := "seekprog-codegen",
-    scalacOptions ++= Seq(
-      "-no-indent"
-    )
+    codegenSeekprog := {
+      val rootDir = sourceManaged.value / "seekprog"
+      IO.delete(rootDir)
+      val cp =
+        Attributed.blank(
+          (Compile / packageBin).value
+        ) +: (Compile / dependencyClasspath).value
+      val r = (Compile / runner).value
+      val s = streams.value
+      r.run(
+        "net.kgtkr.seekprog.codegen.Codegen",
+        cp.files,
+        Array(rootDir.getAbsolutePath()),
+        s.log
+      ).failed foreach (sys error _.getMessage)
+      (rootDir ** "*.scala").get
+    }
   );
 
 lazy val root = project
   .in(file("."))
-  .dependsOn(codegenProject)
   .settings(sharedSettings)
   .settings(
     name := "seekprog",
@@ -36,20 +54,16 @@ lazy val root = project
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser"
     ).map(_ % "0.14.5"),
-    Compile / sourceGenerators += Def.task {
-      val rootDir = sourceManaged.value / "seekprog"
-      IO.delete(rootDir)
-      val cp = (Compile / dependencyClasspath).value
-      val r = (Compile / runner).value
-      val s = streams.value
-      r.run(
-        "net.kgtkr.seekprog.codegen.Codegen",
-        cp.files,
-        Array(rootDir.getAbsolutePath()),
-        s.log
-      ).failed foreach (sys error _.getMessage)
-      (rootDir ** "*.scala").get
-    },
+    /*libraryDependencies ++= Seq(
+      "org.openjfx" % "javafx-graphics" % "20"
+        classifier "linux-aarch64"
+        classifier
+        "linux" classifier
+        "mac-aarch64" classifier
+        "mac" classifier
+        "win"
+    ),*/
+    Compile / sourceGenerators += codegenProject / codegenSeekprog,
     buildTool := BuildTool.buildTool.value,
     deployToolDev := BuildTool.deployToolDev.value
   )
