@@ -54,15 +54,23 @@ lazy val root = project
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser"
     ).map(_ % "0.14.5"),
-    /*libraryDependencies ++= Seq(
-      "org.openjfx" % "javafx-graphics" % "20"
-        classifier "linux-aarch64"
-        classifier
-        "linux" classifier
-        "mac-aarch64" classifier
-        "mac" classifier
+    libraryDependencies ++= Seq(
+      "javafx-base",
+      "javafx-controls",
+      "javafx-fxml",
+      "javafx-graphics",
+      "javafx-media",
+      "javafx-swing",
+      "javafx-web"
+    ).map(artifact =>
+      Seq(
+        "linux",
+        "linux-aarch64",
+        "mac-aarch64",
+        "mac",
         "win"
-    ),*/
+      ).foldLeft("org.openjfx" % artifact % "20")(_ classifier _),
+    ),
     Compile / sourceGenerators += codegenProject / codegenSeekprog,
     buildTool := BuildTool.buildTool.value,
     deployToolDev := BuildTool.deployToolDev.value
