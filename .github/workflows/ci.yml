@@ -1,0 +1,23 @@
+name: ci
+
+on: [push]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup JDK
+        uses: actions/setup-java@v2
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Coursier cache
+        uses: coursier/cache-action@v6
+      - name: Build
+        run: |
+          sbt buildTool
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Seekprog
+          path: target/scala-3.3.0/Seekprog.zip
