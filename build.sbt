@@ -12,7 +12,6 @@ lazy val buildTool =
   taskKey[File]("Build as processing tool for development")
 lazy val buildToolProd =
   taskKey[File]("Build as processing tool for production")
-lazy val codegen = taskKey[Seq[File]]("codegen")
 
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.0",
@@ -47,8 +46,7 @@ lazy val root = project
       "io.circe" %% "circe-generic",
       "io.circe" %% "circe-parser"
     ).map(_ % "0.14.5"),
-    Compile / sourceGenerators += codegen,
-    codegen := {
+    Compile / sourceGenerators += Def.task {
       val rootDir = sourceManaged.value / "seekprog"
       IO.delete(rootDir)
       val cp = (Compile / dependencyClasspath).value
