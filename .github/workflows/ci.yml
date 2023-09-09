@@ -21,3 +21,26 @@ jobs:
         with:
           name: Seekprog
           path: target/scala-3.3.0/Seekprog.zip
+  deploy:
+    permissions:
+      pages: write
+      id-token: write
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: Seekprog
+          path: target/scala-3.3.0/Seekprog.zip
+      - run: |
+          mkdir pages
+          cp target/scala-3.3.0/Seekprog.zip pages/
+          cp tool.properties pages/Seekprog.txt
+      - uses: actions/upload-pages-artifact@v2
+        with:
+          path: pages
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v2
