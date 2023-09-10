@@ -21,10 +21,7 @@ lazy val codegenProject = project
     codegenSeekprog := {
       val rootDir = sourceManaged.value / "seekprog"
       IO.delete(rootDir)
-      val cp =
-        Attributed.blank(
-          (Compile / packageBin).value
-        ) +: (Compile / dependencyClasspath).value
+      val cp = (Compile / fullClasspath).value
       val r = (Compile / runner).value
       val s = streams.value
       r.run(
