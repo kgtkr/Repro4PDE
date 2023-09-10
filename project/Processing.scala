@@ -18,7 +18,7 @@ object Processing {
     s"https://github.com/processing/processing4/releases/download/${tag}/${assetName}"
 
   lazy val downloadProcessingTask = Def.task[File] {
-    val processingBasePath = target.value / "processing";
+    val processingBasePath = file("target") / "processing";
     processingBasePath.mkdirs();
     val processingOutPath = processingBasePath / assetNameWithoutExt;
 
