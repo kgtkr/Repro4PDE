@@ -44,7 +44,9 @@ lazy val root = project
     connectInput := true,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "0.7.29" % Test,
-      "org.scalafx" %% "scalafx" % "20.0.0-R31" exclude ("org.openjfx", "javafx-web")
+      "org.scalafx" %% "scalafx" % "20.0.0-R31" excludeAll (ExclusionRule(
+        organization = "org.openjfx"
+      ))
     ),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core",
@@ -58,6 +60,7 @@ lazy val root = project
       "javafx-graphics",
       "javafx-media",
       "javafx-swing"
+      // "javafx-web" // サイズが大きいかつ使わないので
     ).map(artifact =>
       Seq(
         "linux",
