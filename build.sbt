@@ -44,7 +44,7 @@ lazy val root = project
     connectInput := true,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "0.7.29" % Test,
-      "org.scalafx" %% "scalafx" % "20.0.0-R31"
+      "org.scalafx" %% "scalafx" % "20.0.0-R31" exclude ("org.openjfx", "javafx-web")
     ),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core",
@@ -57,8 +57,7 @@ lazy val root = project
       "javafx-fxml",
       "javafx-graphics",
       "javafx-media",
-      "javafx-swing",
-      "javafx-web"
+      "javafx-swing"
     ).map(artifact =>
       Seq(
         "linux",
