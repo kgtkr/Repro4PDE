@@ -7,7 +7,7 @@ lazy val codegenSeekprog =
 
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.0",
-  Compile / unmanagedClasspath ++= Processing.processingCpTask.value,
+  Compile / unmanagedJars ++= Processing.processingCpTask.value,
   scalacOptions ++= Seq(
     "-no-indent"
   )
