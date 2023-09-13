@@ -16,8 +16,69 @@ import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
   io.circe.syntax._
 import scala.util.Try
 import processing.core.PConstants
+import java.awt.Canvas
+import java.awt.event.{
+  MouseListener,
+  MouseMotionListener,
+  MouseWheelListener,
+  KeyListener
+}
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
+  var mouseListeners: Array[MouseListener] = null;
+  var mouseMotionListeners: Array[MouseMotionListener] = null;
+  var mouseWheelListeners: Array[MouseWheelListener] = null;
+  var keyListeners: Array[KeyListener] = null;
+
+  if (RuntimeMain.surface == null) {
+    RuntimeMain.surface = this;
+  }
+
+  def disableEvent() = {
+    val canvas = PSurfaceAWTRuntime.this.getNative().asInstanceOf[Canvas];
+
+    mouseListeners = canvas.getMouseListeners();
+    mouseMotionListeners = canvas.getMouseMotionListeners();
+    mouseWheelListeners = canvas.getMouseWheelListeners();
+    keyListeners = canvas.getKeyListeners();
+
+    for (listener <- mouseListeners) {
+      canvas.removeMouseListener(listener);
+    }
+
+    for (listener <- mouseMotionListeners) {
+      canvas.removeMouseMotionListener(listener);
+    }
+
+    for (listener <- mouseWheelListeners) {
+      canvas.removeMouseWheelListener(listener);
+    }
+
+    for (listener <- keyListeners) {
+      canvas.removeKeyListener(listener);
+    }
+  }
+
+  def enableEvent() = {
+    val canvas = PSurfaceAWTRuntime.this.getNative().asInstanceOf[Canvas];
+
+    for (listener <- mouseListeners) {
+      canvas.addMouseListener(listener);
+    }
+
+    for (listener <- mouseMotionListeners) {
+      canvas.addMouseMotionListener(listener);
+    }
+
+    for (listener <- mouseWheelListeners) {
+      canvas.addMouseWheelListener(listener);
+    }
+
+    for (listener <- keyListeners) {
+      canvas.addKeyListener(listener);
+    }
+  }
+
   override def createThread(): Thread = {
     return new AnimationThreadRuntime {
       override def callDraw(): Unit = {

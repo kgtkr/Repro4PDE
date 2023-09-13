@@ -37,10 +37,13 @@ class SketchHandler(
           "Seekprog not support renderer settings. size() must be two arguments."
         );
       }
+
+      RuntimeMain.surface.disableEvent();
     }
 
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {
       this.onTarget = true;
+      RuntimeMain.surface.enableEvent();
       val endTime = System.nanoTime();
       val ms = (endTime - this.startTime) / 1000000.0;
       println(

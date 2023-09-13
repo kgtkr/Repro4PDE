@@ -27,6 +27,7 @@ object RuntimeMain {
   var notTriggerPausedEvent = false;
   val resumeQueue = new LinkedTransferQueue[Unit]();
   val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
+  var surface: PSurfaceAWTRuntime = null;
 
   def init(
       sketch: PApplet,
