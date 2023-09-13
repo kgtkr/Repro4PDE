@@ -169,10 +169,11 @@ object ControlPanel {
                     ()
                   })
                 };
-                editorManager.eventListeners += (event => {
+                editorManager.listen { event =>
                   Platform.runLater {
                     event match {
-                      case EditorManagerEvent.UpdateLocation(value2, max2) => {
+                      case EditorManagerEvent
+                            .UpdateLocation(value2, max2) => {
                         slider.max = max2.toDouble / 60
                         if (!slider.valueChanging.value) {
                           slider.value = value2.toDouble / 60
@@ -183,7 +184,7 @@ object ControlPanel {
                       }
                     }
                   }
-                });
+                };
 
                 children = Seq(
                   slider,

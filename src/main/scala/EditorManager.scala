@@ -75,8 +75,7 @@ enum EditorManagerEvent {
 
 class EditorManager(val editor: JavaEditor) {
   val cmdQueue = new LinkedTransferQueue[EditorManagerCmd]();
-  // 1つのスレッドからしかアクセスしないこと
-  var eventListeners = Buffer[EditorManagerEvent => Unit]();
+  var eventListeners = List[EditorManagerEvent => Unit]();
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -151,5 +150,9 @@ class EditorManager(val editor: JavaEditor) {
 
       ()
     }).start();
+  }
+
+  def listen(listener: EditorManagerEvent => Unit) = {
+    eventListeners = listener :: eventListeners;
   }
 }
