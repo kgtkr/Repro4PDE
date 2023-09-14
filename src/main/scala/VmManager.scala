@@ -69,11 +69,6 @@ import scala.concurrent.Promise
 enum VmManagerCmd {
   val done: Promise[Unit];
 
-  case ReloadSketch(done: Promise[Unit])
-  case UpdateLocation(
-      frameCount: Int,
-      done: Promise[Unit]
-  )
   case StartSketch(done: Promise[Unit]) // for internal
   case PauseSketch(done: Promise[Unit])
   case ResumeSketch(done: Promise[Unit])
@@ -293,17 +288,6 @@ class VmManager(
                   progressCmd = None;
                   done.failure(new Exception("already started"));
                 }
-                case VmManagerCmd.ReloadSketch(_) => {
-                  println("Reloading sketch...");
-                  vm.exit(0);
-                  isExpectedExit = true;
-                }
-                case VmManagerCmd.UpdateLocation(frameCount, _) => {
-                  println("UpdateLocation sketch...");
-                  editorManager.frameCount = frameCount
-                  vm.exit(0);
-                  isExpectedExit = true;
-                }
                 case VmManagerCmd.PauseSketch(done) => {
                   if (!running) {
                     progressCmd = None;
@@ -344,13 +328,9 @@ class VmManager(
             event match {
               case RuntimeEvent.OnTargetFrameCount => {
                 progressCmd match {
-                  case Some(
-                        cmd @ (_: VmManagerCmd.ReloadSketch |
-                        _: VmManagerCmd.UpdateLocation |
-                        _: VmManagerCmd.StartSketch)
-                      ) => {
+                  case Some(VmManagerCmd.StartSketch(done)) => {
                     progressCmd = None;
-                    cmd.done.success(());
+                    done.success(());
                   }
                   case progressCmd => {
                     println("Unexpected event: OnTargetFrameCount");
