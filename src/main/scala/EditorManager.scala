@@ -59,6 +59,7 @@ import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.collection.mutable.Map as MMap
+import scala.collection.mutable.Set as MSet
 
 object EditorManager {
   enum Cmd {
@@ -73,6 +74,8 @@ object EditorManager {
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
+    case EnableSlave(id: Int, done: Promise[Unit])
+    case DisableSlave(id: Int, done: Promise[Unit])
   }
 
   enum Event {
@@ -95,6 +98,7 @@ class EditorManager(val editor: JavaEditor) {
   var build: Build = null;
   val prevBuilds = Buffer[Build]();
   var vmManagers: Option[EditorManager.VmManagers] = None;
+  val enableSlaves = MSet[Int]();
 
   private def updateBuild() = {
     try {
@@ -320,6 +324,14 @@ class EditorManager(val editor: JavaEditor) {
             }
 
             isExit = true;
+          }
+          case EditorManager.Cmd.EnableSlave(id, done) => {
+            enableSlaves += id;
+            done.success(());
+          }
+          case EditorManager.Cmd.DisableSlave(id, done) => {
+            enableSlaves -= id;
+            done.success(());
           }
         }
       }

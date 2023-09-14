@@ -39,6 +39,8 @@ import scalafx.scene.control.ScrollPane
 import scalafx.scene.control.TableView
 import scalafx.scene.control.ListView
 import scalafx.scene.control.ListCell
+import scalafx.scene.control.CheckBox
+import scalafx.scene.control.cell.CheckBoxListCell
 
 enum PlayerState {
   case Playing;
@@ -48,7 +50,13 @@ enum PlayerState {
 
 case class BuildForControlPanel(
     id: Int
-)
+) {
+  val selected = BooleanProperty(false)
+
+  override def toString() = {
+    s"Build ${id}"
+  }
+}
 
 object ControlPanel {
   def init() = {
@@ -194,7 +202,28 @@ object ControlPanel {
                         playerState.value = PlayerState.Stopped
                       }
                       case EditorManager.Event.AddedPrevBuild(build) => {
-                        builds.value.insert(0, BuildForControlPanel(build.id));
+                        val buildForControlPanel =
+                          BuildForControlPanel(build.id)
+                        builds.value.insert(0, buildForControlPanel);
+                        buildForControlPanel.selected.onChange {
+                          (_, _, selected) =>
+                            loading.value = true
+                            if (selected) {
+                              editorManager.cmdQueue.add(
+                                EditorManager.Cmd.EnableSlave(
+                                  build.id,
+                                  donePromise()
+                                )
+                              )
+                            } else {
+                              editorManager.cmdQueue.add(
+                                EditorManager.Cmd.DisableSlave(
+                                  build.id,
+                                  donePromise()
+                                )
+                              )
+                            }
+                        }
                       }
                     }
                   }
@@ -275,14 +304,10 @@ object ControlPanel {
                   new ListView[BuildForControlPanel] {
                     items = builds.value
                     maxHeight = 100
-                    cellFactory = (_: ListView[_]) =>
-                      new ListCell[
-                        BuildForControlPanel
-                      ] {
-                        item.onChange { (_, _, build) =>
-                          text = s"build-${build.id}"
-                        }
-                      }
+                    disable <== loading
+                    cellFactory = CheckBoxListCell.forListView(
+                      (_: BuildForControlPanel).selected
+                    )
                   }
                 )
               }
