@@ -59,13 +59,6 @@ import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-enum VmExitReason {
-  case Reload;
-  case UpdateLocation;
-  case Exit;
-  case Unexpected;
-}
-
 enum EditorManagerCmd {
   val done: Promise[Unit];
 
@@ -165,7 +158,7 @@ class EditorManager(val editor: JavaEditor) {
     } yield ()
   }
 
-  private def exitVm(reason: VmExitReason) = {
+  private def exitVm() = {
     assert(vmManager.isDefined);
     val oldVmManager = vmManager.get;
 
@@ -195,7 +188,7 @@ class EditorManager(val editor: JavaEditor) {
                   Await.ready(
                     done
                       .completeWith(for {
-                        _ <- exitVm(VmExitReason.Reload)
+                        _ <- exitVm()
                         _ <- startVm()
                       } yield ())
                       .future,
@@ -219,7 +212,7 @@ class EditorManager(val editor: JavaEditor) {
                 Await.ready(
                   done
                     .completeWith(for {
-                      _ <- exitVm(VmExitReason.UpdateLocation)
+                      _ <- exitVm()
                       _ <- Future {
                         this.frameCount = frameCount;
                       }
@@ -296,7 +289,7 @@ class EditorManager(val editor: JavaEditor) {
               case Some(vmManager) => {
                 Await.ready(
                   done
-                    .completeWith(exitVm(VmExitReason.Exit))
+                    .completeWith(exitVm())
                     .future,
                   Duration.Inf
                 )
