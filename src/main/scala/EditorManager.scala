@@ -53,6 +53,11 @@ import net.kgtkr.seekprog.runtime.PdeEventWrapper
 import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
 import scala.concurrent.Promise
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.blocking
+import scala.concurrent.Future
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 enum VmExitReason {
   case Reload;
@@ -87,79 +92,223 @@ class EditorManager(val editor: JavaEditor) {
   var frameCount = 0;
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
-  var progressCmd: Option[EditorManagerCmd] = None;
   var running = false;
   var build: JavaBuild = null;
-  var lastVmExitReason = VmExitReason.Reload;
   var vmManager: Option[VmManager] = None;
+
+  private def updateBuild() = {
+    try {
+      editor.prepareRun();
+      val build = new JavaBuild(editor.getSketch());
+      build.build(true);
+      this.build = build;
+    } catch {
+      case e: Exception => {
+        e.printStackTrace();
+        editor.statusError(e);
+        throw e;
+      }
+    }
+  }
+
+  private def startVm() = {
+    assert(vmManager.isEmpty);
+    editor.statusEmpty();
+
+    for {
+      newVmManager <- {
+        val p = Promise[Unit]();
+        val newVmManager = new VmManager(this);
+        blocking {
+          newVmManager.run(p)
+        }
+        newVmManager.listen {
+          case VmManagerEvent.UpdateLocation(frameCount, trimMax, events) => {
+            this.frameCount = frameCount;
+            this.maxFrameCount = if (trimMax) {
+              frameCount
+            } else {
+              Math.max(this.maxFrameCount, frameCount);
+            };
+
+            if (this.maxFrameCount < this.pdeEvents.length) {
+              this.pdeEvents.trimEnd(
+                this.pdeEvents.length - this.maxFrameCount
+              );
+            } else if (this.maxFrameCount > this.pdeEvents.length) {
+              this.pdeEvents ++= Seq.fill(
+                this.maxFrameCount - this.pdeEvents.length
+              )(List());
+            }
+            for ((event, i) <- events.zipWithIndex) {
+              this.pdeEvents(frameCount - events.length + i) = event;
+            }
+            this.eventListeners.foreach(
+              _(
+                EditorManagerEvent.UpdateLocation(
+                  frameCount,
+                  this.maxFrameCount
+                )
+              )
+            )
+          }
+          case VmManagerEvent.Stopped() => {
+            this.running = false;
+            this.eventListeners.foreach(_(EditorManagerEvent.Stopped()))
+          }
+        }
+        p.future.map(_ => newVmManager)
+      }
+      _ <- Future {
+        vmManager = Some(newVmManager)
+      }
+    } yield ()
+  }
+
+  private def exitVm(reason: VmExitReason) = {
+    assert(vmManager.isDefined);
+    val oldVmManager = vmManager.get;
+
+    for {
+      _ <- {
+        val p = Promise[Unit]();
+        oldVmManager.cmdQueue.put(VmManagerCmd.Exit(p));
+        p.future
+      }
+      _ <- Future {
+        vmManager = None;
+      }
+    } yield ()
+  }
 
   def run() = {
     new Thread(() => {
-      while (lastVmExitReason != VmExitReason.Exit) {
-        assert(progressCmd.isEmpty);
+      var isExit = false;
+      while (!isExit) {
         val cmd = cmdQueue.take();
-        progressCmd = Some(cmd);
         cmd match {
-          case EditorManagerCmd.ReloadSketch(done)               => {
-          }
-          case EditorManagerCmd.UpdateLocation(frameCount, done) => {}
-          case EditorManagerCmd.StartSketch(done) => {
-            running = true;
-            editor.statusEmpty();
-            editor.activateRun();
-            Iterator
-              .continually({
+          case EditorManagerCmd.ReloadSketch(done) => {
+            vmManager match {
+              case Some(_) => {
                 try {
-                  if (lastVmExitReason != VmExitReason.UpdateLocation) {
-                    editor.prepareRun();
-                    val build = new JavaBuild(editor.getSketch());
-                    build.build(true);
-                    this.build = build;
-                  }
-
-                  val vm = new VmManager(this);
-                  lastVmExitReason = vm.run();
+                  this.updateBuild();
+                  Await.ready(
+                    done
+                      .completeWith(for {
+                        _ <- exitVm(VmExitReason.Reload)
+                        _ <- startVm()
+                      } yield ())
+                      .future,
+                    Duration.Inf
+                  )
                 } catch {
                   case e: Exception => {
-                    e.printStackTrace();
-                    editor.statusError(e);
-                    lastVmExitReason = VmExitReason.Unexpected;
+                    done.failure(e);
                   }
-                } finally {
-                  editor.deactivateRun();
                 }
 
-                lastVmExitReason
-              })
-              .takeWhile(reason =>
-                reason == VmExitReason.Reload || reason == VmExitReason.UpdateLocation
-              )
-              .toList
-            running = false;
-            if (lastVmExitReason == VmExitReason.Unexpected) {
-              progressCmd.foreach(
-                _.done.failure(new Exception("unexpected vm exit"))
-              );
-              progressCmd = None;
-              this.eventListeners.foreach(
-                _(
-                  EditorManagerEvent.Stopped()
-                )
-              )
+              }
+              case None => {
+                done.failure(new Exception("vm is not running"));
+              }
             }
           }
-          case EditorManagerCmd.PauseSketch(done) => {},
-          case EditorManagerCmd.ResumeSketch(done) => {},
+          case EditorManagerCmd.UpdateLocation(frameCount, done) => {
+            vmManager match {
+              case Some(_) => {
+                Await.ready(
+                  done
+                    .completeWith(for {
+                      _ <- exitVm(VmExitReason.UpdateLocation)
+                      _ <- Future {
+                        this.frameCount = frameCount;
+                      }
+                      _ <- startVm()
+                    } yield ())
+                    .future,
+                  Duration.Inf
+                )
+              }
+              case None => {
+                done.failure(new Exception("vm is not running"));
+              }
+            }
+          }
+          case EditorManagerCmd.StartSketch(done) => {
+            vmManager match {
+              case Some(_) => {
+                done.failure(new Exception("vm is already running"));
+              }
+              case None => {
+                try {
+                  running = true;
+                  this.updateBuild();
+                  Await.ready(
+                    done
+                      .completeWith(startVm())
+                      .future,
+                    Duration.Inf
+                  )
+                } catch {
+                  case e: Exception => {
+                    done.failure(e);
+                  }
+                }
+              }
+            }
+          }
+          case EditorManagerCmd.PauseSketch(done) => {
+            vmManager match {
+              case Some(vmManager) => {
+                Await.ready(
+                  {
+                    vmManager.cmdQueue.put(VmManagerCmd.PauseSketch(done))
+                    done.future
+                  },
+                  Duration.Inf
+                )
+                this.running = false;
+              }
+              case None => {
+                done.failure(new Exception("vm is not running"));
+              }
+            }
+          }
+          case EditorManagerCmd.ResumeSketch(done) => {
+            vmManager match {
+              case Some(vmManager) => {
+                Await.ready(
+                  {
+                    vmManager.cmdQueue.put(VmManagerCmd.ResumeSketch(done))
+                    done.future
+                  },
+                  Duration.Inf
+                )
+                this.running = false;
+              }
+              case None => {
+                done.failure(new Exception("vm is not running"));
+              }
+            }
+          }
           case EditorManagerCmd.Exit(done) => {
             vmManager match {
-              case Some(vmManager) => {}
+              case Some(vmManager) => {
+                Await.ready(
+                  done
+                    .completeWith(exitVm(VmExitReason.Exit))
+                    .future,
+                  Duration.Inf
+                )
+                running = false;
+              }
               case None => {
                 running = false;
                 done.success(());
-                lastVmExitReason = VmExitReason.Exit;
-                progressCmd = None;
               }
             }
+
+            isExit = true;
           }
         }
       }

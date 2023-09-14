@@ -74,14 +74,18 @@ enum VmManagerCmd {
       frameCount: Int,
       done: Promise[Unit]
   )
-  case StartSketch(done: Promise[Unit])
+  case StartSketch(done: Promise[Unit]) // for internal
   case PauseSketch(done: Promise[Unit])
   case ResumeSketch(done: Promise[Unit])
   case Exit(done: Promise[Unit])
 }
 
 enum VmManagerEvent {
-  case UpdateLocation(frameCount: Int, max: Int);
+  case UpdateLocation(
+      frameCount: Int,
+      trimMax: Boolean,
+      events: List[List[PdeEventWrapper]]
+  );
   case Stopped();
 }
 
@@ -93,7 +97,7 @@ class VmManager(
   var progressCmd: Option[VmManagerCmd] = None;
   var running = false;
 
-  def run() = {
+  def run(done: Promise[Unit]) = {
     var isExpectedExit = false;
 
     val sockPath = {
@@ -195,6 +199,7 @@ class VmManager(
         ()
       });
     runtimeEventThread.start();
+    this.progressCmd = Some(VmManagerCmd.StartSketch(done));
 
     new Thread(() => {
       try {
@@ -354,35 +359,12 @@ class VmManager(
               }
               case RuntimeEvent
                     .OnUpdateLocation(frameCount, trimMax, events) => {
-                editorManager.frameCount = frameCount;
-                editorManager.maxFrameCount = if (trimMax) {
-                  frameCount
-                } else {
-                  Math.max(editorManager.maxFrameCount, frameCount);
-                };
-
-                if (
-                  editorManager.maxFrameCount < editorManager.pdeEvents.length
-                ) {
-                  editorManager.pdeEvents.trimEnd(
-                    editorManager.pdeEvents.length - editorManager.maxFrameCount
-                  );
-                } else if (
-                  editorManager.maxFrameCount > editorManager.pdeEvents.length
-                ) {
-                  editorManager.pdeEvents ++= Seq.fill(
-                    editorManager.maxFrameCount - editorManager.pdeEvents.length
-                  )(List());
-                }
-                for ((event, i) <- events.zipWithIndex) {
-                  editorManager.pdeEvents(frameCount - events.length + i) =
-                    event;
-                }
-                editorManager.eventListeners.foreach(
+                eventListeners.foreach(
                   _(
-                    EditorManagerEvent.UpdateLocation(
+                    VmManagerEvent.UpdateLocation(
                       frameCount,
-                      editorManager.maxFrameCount
+                      trimMax,
+                      events
                     )
                   )
                 )
