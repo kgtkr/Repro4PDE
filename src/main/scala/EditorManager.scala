@@ -54,6 +54,13 @@ import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
 import scala.concurrent.Promise
 
+enum VmExitReason {
+  case Reload;
+  case UpdateLocation;
+  case Exit;
+  case Unexpected;
+}
+
 enum EditorManagerCmd {
   val done: Promise[Unit];
 
@@ -84,15 +91,19 @@ class EditorManager(val editor: JavaEditor) {
   var running = false;
   var build: JavaBuild = null;
   var lastVmExitReason = VmExitReason.Reload;
+  var vmManager: Option[VmManager] = None;
 
   def run() = {
     new Thread(() => {
       while (lastVmExitReason != VmExitReason.Exit) {
         assert(progressCmd.isEmpty);
         val cmd = cmdQueue.take();
+        progressCmd = Some(cmd);
         cmd match {
-          case cmd @ EditorManagerCmd.StartSketch(done) => {
-            progressCmd = Some(cmd);
+          case EditorManagerCmd.ReloadSketch(done)               => {
+          }
+          case EditorManagerCmd.UpdateLocation(frameCount, done) => {}
+          case EditorManagerCmd.StartSketch(done) => {
             running = true;
             editor.statusEmpty();
             editor.activateRun();
@@ -137,13 +148,18 @@ class EditorManager(val editor: JavaEditor) {
               )
             }
           }
+          case EditorManagerCmd.PauseSketch(done) => {},
+          case EditorManagerCmd.ResumeSketch(done) => {},
           case EditorManagerCmd.Exit(done) => {
-            running = false;
-            done.success(());
-            lastVmExitReason = VmExitReason.Exit;
-          }
-          case cmd => {
-            cmd.done.failure(new Exception("unexpected command"));
+            vmManager match {
+              case Some(vmManager) => {}
+              case None => {
+                running = false;
+                done.success(());
+                lastVmExitReason = VmExitReason.Exit;
+                progressCmd = None;
+              }
+            }
           }
         }
       }

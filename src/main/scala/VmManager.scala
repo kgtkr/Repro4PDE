@@ -64,19 +64,37 @@ import java.net.UnixDomainSocketAddress
 import java.net.StandardProtocolFamily
 import net.kgtkr.seekprog.ext._;
 import net.kgtkr.seekprog.tool.SeekprogTool
+import scala.concurrent.Promise
 
-enum VmExitReason {
-  case Reload;
-  case UpdateLocation;
-  case Exit;
-  case Unexpected;
+enum VmManagerCmd {
+  val done: Promise[Unit];
+
+  case ReloadSketch(done: Promise[Unit])
+  case UpdateLocation(
+      frameCount: Int,
+      done: Promise[Unit]
+  )
+  case StartSketch(done: Promise[Unit])
+  case PauseSketch(done: Promise[Unit])
+  case ResumeSketch(done: Promise[Unit])
+  case Exit(done: Promise[Unit])
+}
+
+enum VmManagerEvent {
+  case UpdateLocation(frameCount: Int, max: Int);
+  case Stopped();
 }
 
 class VmManager(
     val editorManager: EditorManager
 ) {
-  def run(): VmExitReason = {
-    var exitReason = VmExitReason.Unexpected;
+  val cmdQueue = new LinkedTransferQueue[VmManagerCmd]();
+  var eventListeners = List[VmManagerEvent => Unit]();
+  var progressCmd: Option[VmManagerCmd] = None;
+  var running = false;
+
+  def run() = {
+    var isExpectedExit = false;
 
     val sockPath = {
       val tempDir = Files.createTempDirectory("seekprog");
@@ -96,6 +114,7 @@ class VmManager(
       ),
       "tool"
     );
+    running = editorManager.running;
     val build = editorManager.build;
     val runner =
       new Runner(build, new RunnerListenerEdtAdapter(editorManager.editor));
@@ -177,232 +196,249 @@ class VmManager(
       });
     runtimeEventThread.start();
 
-    try {
-      while (true) {
-        val eventSet = Option(vm.eventQueue().remove(200))
-          .map(_.asScala)
-          .getOrElse(Seq.empty);
-        for (evt <- eventSet) {
-          println(evt);
-          evt match {
-            case evt: ClassPrepareEvent => {
-              val classType = evt.referenceType().asInstanceOf[ClassType];
-              if (classType.name() == build.getSketchClassName()) {
-                vm.eventRequestManager()
-                  .createBreakpointRequest(
-                    classType.methodsByName("settings").get(0).location()
-                  )
-                  .enable();
+    new Thread(() => {
+      try {
+        while (true) {
+          val eventSet = Option(vm.eventQueue().remove(200))
+            .map(_.asScala)
+            .getOrElse(Seq.empty);
+          for (evt <- eventSet) {
+            println(evt);
+            evt match {
+              case evt: ClassPrepareEvent => {
+                val classType = evt.referenceType().asInstanceOf[ClassType];
+                if (classType.name() == build.getSketchClassName()) {
+                  vm.eventRequestManager()
+                    .createBreakpointRequest(
+                      classType.methodsByName("settings").get(0).location()
+                    )
+                    .enable();
+                }
               }
-            }
-            case evt: BreakpointEvent => {
-              val frame = evt.thread().frame(0);
-              val instance = frame.thisObject();
+              case evt: BreakpointEvent => {
+                val frame = evt.thread().frame(0);
+                val instance = frame.thisObject();
 
-              evt.location().method().name() match {
-                case "settings" => {
-                  val ClassClassType = vm
-                    .classesByName("java.lang.Class")
-                    .get(0)
-                    .asInstanceOf[ClassType];
-                  ClassClassType.invokeMethod(
-                    evt.thread(),
-                    ClassClassType
-                      .methodsByName(
-                        "forName",
-                        "(Ljava/lang/String;)Ljava/lang/Class;"
-                      )
-                      .get(0),
-                    Arrays.asList(
-                      vm.mirrorOf(
+                evt.location().method().name() match {
+                  case "settings" => {
+                    val ClassClassType = vm
+                      .classesByName("java.lang.Class")
+                      .get(0)
+                      .asInstanceOf[ClassType];
+                    ClassClassType.invokeMethod(
+                      evt.thread(),
+                      ClassClassType
+                        .methodsByName(
+                          "forName",
+                          "(Ljava/lang/String;)Ljava/lang/Class;"
+                        )
+                        .get(0),
+                      Arrays.asList(
+                        vm.mirrorOf(
+                          classOf[runtime.RuntimeMain].getName()
+                        )
+                      ),
+                      0
+                    );
+
+                    val RuntimeMainClassType = vm
+                      .classesByName(
                         classOf[runtime.RuntimeMain].getName()
                       )
-                    ),
-                    0
-                  );
+                      .get(0)
+                      .asInstanceOf[ClassType];
 
-                  val RuntimeMainClassType = vm
-                    .classesByName(
-                      classOf[runtime.RuntimeMain].getName()
-                    )
-                    .get(0)
-                    .asInstanceOf[ClassType];
-
-                  RuntimeMainClassType.invokeMethod(
-                    evt.thread(),
-                    RuntimeMainClassType
-                      .methodsByName("init")
-                      .get(0),
-                    Arrays.asList(
-                      instance,
-                      vm.mirrorOf(editorManager.frameCount),
-                      vm.mirrorOf(
-                        editorManager.pdeEvents.toList.asJson.noSpaces
+                    RuntimeMainClassType.invokeMethod(
+                      evt.thread(),
+                      RuntimeMainClassType
+                        .methodsByName("init")
+                        .get(0),
+                      Arrays.asList(
+                        instance,
+                        vm.mirrorOf(editorManager.frameCount),
+                        vm.mirrorOf(
+                          editorManager.pdeEvents.toList.asJson.noSpaces
+                        ),
+                        vm.mirrorOf(!running)
                       ),
-                      vm.mirrorOf(!editorManager.running)
-                    ),
-                    0
-                  );
-                  evt.request().disable();
+                      0
+                    );
+                    evt.request().disable();
+                  }
+                  case _ =>
+                    throw new RuntimeException(
+                      "Unreachable"
+                    )
                 }
-                case _ =>
-                  throw new RuntimeException(
-                    "Unreachable"
-                  )
-              }
 
+              }
+              case evt: ExceptionEvent => {
+                runner.exceptionEvent(evt);
+              }
+              case _ => {}
             }
-            case evt: ExceptionEvent => {
-              runner.exceptionEvent(evt);
-            }
-            case _ => {}
           }
-        }
 
-        if (editorManager.progressCmd.isEmpty) {
-          Option(editorManager.cmdQueue.poll()).foreach(cmd => {
-            editorManager.progressCmd = Some(cmd);
+          if (progressCmd.isEmpty) {
+            Option(cmdQueue.poll()).foreach(cmd => {
+              progressCmd = Some(cmd);
 
-            cmd match {
-              case EditorManagerCmd.StartSketch(done) => {
-                editorManager.progressCmd = None;
-                done.failure(new Exception("already started"));
+              cmd match {
+                case VmManagerCmd.StartSketch(done) => {
+                  progressCmd = None;
+                  done.failure(new Exception("already started"));
+                }
+                case VmManagerCmd.ReloadSketch(_) => {
+                  println("Reloading sketch...");
+                  vm.exit(0);
+                  isExpectedExit = true;
+                }
+                case VmManagerCmd.UpdateLocation(frameCount, _) => {
+                  println("UpdateLocation sketch...");
+                  editorManager.frameCount = frameCount
+                  vm.exit(0);
+                  isExpectedExit = true;
+                }
+                case VmManagerCmd.PauseSketch(done) => {
+                  if (!running) {
+                    progressCmd = None;
+                    done.failure(new Exception("already paused"));
+                  } else {
+                    runtimeCmdQueue.add(RuntimeCmd.Pause());
+                    running = false;
+                  }
+
+                }
+                case VmManagerCmd.ResumeSketch(done) => {
+                  if (running) {
+                    progressCmd = None;
+                    done.failure(new Exception("already running"));
+                  } else {
+                    runtimeCmdQueue.add(RuntimeCmd.Resume());
+                    running = true;
+                  }
+                }
+                case VmManagerCmd.Exit(done) => {
+                  running = false;
+                  vm.exit(0);
+                  runtimeEventThread.interrupt();
+                  isExpectedExit = true;
+
+                  progressCmd = None;
+                  done.success(());
+                }
               }
-              case EditorManagerCmd.ReloadSketch(_) => {
-                println("Reloading sketch...");
-                vm.exit(0);
-                exitReason = VmExitReason.Reload;
+            })
+          }
+
+          for (
+            event <- Iterator
+              .continually(Option(runtimeEventQueue.poll()))
+              .mapWhile(identity)
+          ) {
+            event match {
+              case RuntimeEvent.OnTargetFrameCount => {
+                progressCmd match {
+                  case Some(
+                        cmd @ (_: VmManagerCmd.ReloadSketch |
+                        _: VmManagerCmd.UpdateLocation |
+                        _: VmManagerCmd.StartSketch)
+                      ) => {
+                    progressCmd = None;
+                    cmd.done.success(());
+                  }
+                  case progressCmd => {
+                    println("Unexpected event: OnTargetFrameCount");
+                  }
+                }
               }
-              case EditorManagerCmd.UpdateLocation(frameCount, _) => {
-                println("UpdateLocation sketch...");
-                editorManager.frameCount = frameCount
-                vm.exit(0);
-                exitReason = VmExitReason.UpdateLocation;
-              }
-              case EditorManagerCmd.PauseSketch(done) => {
-                if (!editorManager.running) {
-                  editorManager.progressCmd = None;
-                  done.failure(new Exception("already paused"));
+              case RuntimeEvent
+                    .OnUpdateLocation(frameCount, trimMax, events) => {
+                editorManager.frameCount = frameCount;
+                editorManager.maxFrameCount = if (trimMax) {
+                  frameCount
                 } else {
-                  runtimeCmdQueue.add(RuntimeCmd.Pause());
-                  editorManager.running = false;
-                }
+                  Math.max(editorManager.maxFrameCount, frameCount);
+                };
 
-              }
-              case EditorManagerCmd.ResumeSketch(done) => {
-                if (editorManager.running) {
-                  editorManager.progressCmd = None;
-                  done.failure(new Exception("already running"));
-                } else {
-                  runtimeCmdQueue.add(RuntimeCmd.Resume());
-                  editorManager.running = true;
+                if (
+                  editorManager.maxFrameCount < editorManager.pdeEvents.length
+                ) {
+                  editorManager.pdeEvents.trimEnd(
+                    editorManager.pdeEvents.length - editorManager.maxFrameCount
+                  );
+                } else if (
+                  editorManager.maxFrameCount > editorManager.pdeEvents.length
+                ) {
+                  editorManager.pdeEvents ++= Seq.fill(
+                    editorManager.maxFrameCount - editorManager.pdeEvents.length
+                  )(List());
                 }
-              }
-              case EditorManagerCmd.Exit(done) => {
-                editorManager.running = false;
-                vm.exit(0);
-                runtimeEventThread.interrupt();
-                exitReason = VmExitReason.Exit;
-
-                editorManager.progressCmd = None;
-                done.success(());
-              }
-            }
-          })
-        }
-
-        for (
-          event <- Iterator
-            .continually(Option(runtimeEventQueue.poll()))
-            .mapWhile(identity)
-        ) {
-          event match {
-            case RuntimeEvent.OnTargetFrameCount => {
-              editorManager.progressCmd match {
-                case Some(
-                      cmd @ (_: EditorManagerCmd.ReloadSketch |
-                      _: EditorManagerCmd.UpdateLocation |
-                      _: EditorManagerCmd.StartSketch)
-                    ) => {
-                  editorManager.progressCmd = None;
-                  cmd.done.success(());
+                for ((event, i) <- events.zipWithIndex) {
+                  editorManager.pdeEvents(frameCount - events.length + i) =
+                    event;
                 }
-                case progressCmd => {
-                  println("Unexpected event: OnTargetFrameCount");
-                }
-              }
-            }
-            case RuntimeEvent
-                  .OnUpdateLocation(frameCount, trimMax, events) => {
-              editorManager.frameCount = frameCount;
-              editorManager.maxFrameCount = if (trimMax) {
-                frameCount
-              } else {
-                Math.max(editorManager.maxFrameCount, frameCount);
-              };
-
-              if (
-                editorManager.maxFrameCount < editorManager.pdeEvents.length
-              ) {
-                editorManager.pdeEvents.trimEnd(
-                  editorManager.pdeEvents.length - editorManager.maxFrameCount
-                );
-              } else if (
-                editorManager.maxFrameCount > editorManager.pdeEvents.length
-              ) {
-                editorManager.pdeEvents ++= Seq.fill(
-                  editorManager.maxFrameCount - editorManager.pdeEvents.length
-                )(List());
-              }
-              for ((event, i) <- events.zipWithIndex) {
-                editorManager.pdeEvents(frameCount - events.length + i) = event;
-              }
-              editorManager.eventListeners.foreach(
-                _(
-                  EditorManagerEvent.UpdateLocation(
-                    frameCount,
-                    editorManager.maxFrameCount
+                editorManager.eventListeners.foreach(
+                  _(
+                    EditorManagerEvent.UpdateLocation(
+                      frameCount,
+                      editorManager.maxFrameCount
+                    )
                   )
                 )
-              )
-            }
-            case RuntimeEvent.OnPaused => {
-              editorManager.progressCmd match {
-                case Some(cmd: EditorManagerCmd.PauseSketch) => {
-                  editorManager.progressCmd = None;
-                  cmd.done.success(());
-                }
-                case progressCmd => {
-                  println("Unexpected event: OnPaused");
+              }
+              case RuntimeEvent.OnPaused => {
+                progressCmd match {
+                  case Some(cmd: VmManagerCmd.PauseSketch) => {
+                    progressCmd = None;
+                    cmd.done.success(());
+                  }
+                  case progressCmd => {
+                    println("Unexpected event: OnPaused");
+                  }
                 }
               }
-            }
-            case RuntimeEvent.OnResumed => {
-              editorManager.progressCmd match {
-                case Some(cmd: EditorManagerCmd.ResumeSketch) => {
-                  editorManager.progressCmd = None;
-                  cmd.done.success(());
-                }
-                case progressCmd => {
-                  println("Unexpected event: OnResumed");
+              case RuntimeEvent.OnResumed => {
+                progressCmd match {
+                  case Some(cmd: VmManagerCmd.ResumeSketch) => {
+                    progressCmd = None;
+                    cmd.done.success(());
+                  }
+                  case progressCmd => {
+                    println("Unexpected event: OnResumed");
+                  }
                 }
               }
             }
           }
+
+          vm.resume();
         }
+      } catch {
+        case e: VMDisconnectedException => {
+          runtimeEventThread.interrupt();
+          println("VM is now disconnected.");
+        }
+        case e: Exception => {
+          e.printStackTrace();
+        }
+      }
 
-        vm.resume();
+      if (!isExpectedExit) {
+        progressCmd.foreach(
+          _.done.failure(new Exception("unexpected vm exit"))
+        );
+        progressCmd = None;
+        this.eventListeners.foreach(
+          _(
+            VmManagerEvent.Stopped()
+          )
+        )
       }
-    } catch {
-      case e: VMDisconnectedException => {
-        runtimeEventThread.interrupt();
-        println("VM is now disconnected.");
-      }
-      case e: Exception => {
-        e.printStackTrace();
-      }
-    }
+    }).start();
+  }
 
-    exitReason
+  def listen(listener: VmManagerEvent => Unit) = {
+    eventListeners = listener :: eventListeners;
   }
 }
