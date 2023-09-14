@@ -78,6 +78,7 @@ object EditorManager {
   enum Event {
     case UpdateLocation(frameCount: Int, max: Int);
     case Stopped();
+    case AddedPrevBuild(build: Build);
   }
 
   class VmManagers(var master: VmManager, val slaves: MMap[Int, VmManager]) {}
@@ -91,7 +92,8 @@ class EditorManager(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var running = false;
-  val builds = Buffer[Build]();
+  var build: Build = null;
+  val prevBuilds = Buffer[Build]();
   var vmManagers: Option[EditorManager.VmManagers] = None;
 
   private def updateBuild() = {
@@ -99,7 +101,14 @@ class EditorManager(val editor: JavaEditor) {
       editor.prepareRun();
       val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
-      this.builds += new Build(this.builds.length, javaBuild);
+
+      if (build != null) {
+        this.prevBuilds += build;
+        this.eventListeners.foreach(
+          _(EditorManager.Event.AddedPrevBuild(build))
+        );
+      }
+      build = new Build(this.prevBuilds.length, javaBuild);
     } catch {
       case e: Exception => {
         e.printStackTrace();

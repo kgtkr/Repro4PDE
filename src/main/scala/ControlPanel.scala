@@ -34,12 +34,21 @@ import net.kgtkr.seekprog.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
 import scala.util.Failure
+import scalafx.beans.property.BufferProperty
+import scalafx.scene.control.ScrollPane
+import scalafx.scene.control.TableView
+import scalafx.scene.control.ListView
+import scalafx.scene.control.ListCell
 
 enum PlayerState {
   case Playing;
   case Paused;
   case Stopped;
 }
+
+case class BuildForControlPanel(
+    id: Int
+)
 
 object ControlPanel {
   def init() = {
@@ -52,6 +61,8 @@ object ControlPanel {
     val editorManager = new EditorManager(editor)
     editorManager.run()
     val playerState = ObjectProperty(PlayerState.Stopped);
+    val builds = BufferProperty[BuildForControlPanel](Seq());
+
     def donePromise(onSuccess: => Unit = {}) = {
       import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -182,6 +193,9 @@ object ControlPanel {
                       case EditorManager.Event.Stopped() => {
                         playerState.value = PlayerState.Stopped
                       }
+                      case EditorManager.Event.AddedPrevBuild(build) => {
+                        builds.value.insert(0, BuildForControlPanel(build.id));
+                      }
                     }
                   }
                 };
@@ -248,6 +262,27 @@ object ControlPanel {
                         }
                       }
                     }
+                  }
+                )
+              },
+              new VBox {
+                children = Seq(
+                  new Text {
+                    text = "Prev Builds"
+                    style = "-fx-font: normal bold 10pt sans-serif"
+                    fill = White
+                  },
+                  new ListView[BuildForControlPanel] {
+                    items = builds.value
+                    maxHeight = 100
+                    cellFactory = (_: ListView[_]) =>
+                      new ListCell[
+                        BuildForControlPanel
+                      ] {
+                        item.onChange { (_, _, build) =>
+                          text = s"build-${build.id}"
+                        }
+                      }
                   }
                 )
               }
