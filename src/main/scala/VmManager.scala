@@ -117,7 +117,7 @@ class VmManager(
       "tool"
     );
     running = editorManager.running;
-    val build = editorManager.build;
+    val build = editorManager.builds.last.javaBuild;
     val runner =
       new Runner(build, new RunnerListenerEdtAdapter(editorManager.editor));
 

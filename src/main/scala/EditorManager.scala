@@ -88,15 +88,15 @@ class EditorManager(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var running = false;
-  var build: JavaBuild = null;
+  val builds = Buffer[Build]();
   var vmManager: Option[VmManager] = None;
 
   private def updateBuild() = {
     try {
       editor.prepareRun();
-      val build = new JavaBuild(editor.getSketch());
-      build.build(true);
-      this.build = build;
+      val javaBuild = new JavaBuild(editor.getSketch());
+      javaBuild.build(true);
+      this.builds += new Build(this.builds.length, javaBuild);
     } catch {
       case e: Exception => {
         e.printStackTrace();
