@@ -59,28 +59,30 @@ import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-enum EditorManagerCmd {
-  val done: Promise[Unit];
+object EditorManager {
+  enum Cmd {
+    val done: Promise[Unit];
 
-  case ReloadSketch(done: Promise[Unit])
-  case UpdateLocation(
-      frameCount: Int,
-      done: Promise[Unit]
-  )
-  case StartSketch(done: Promise[Unit])
-  case PauseSketch(done: Promise[Unit])
-  case ResumeSketch(done: Promise[Unit])
-  case Exit(done: Promise[Unit])
-}
+    case ReloadSketch(done: Promise[Unit])
+    case UpdateLocation(
+        frameCount: Int,
+        done: Promise[Unit]
+    )
+    case StartSketch(done: Promise[Unit])
+    case PauseSketch(done: Promise[Unit])
+    case ResumeSketch(done: Promise[Unit])
+    case Exit(done: Promise[Unit])
+  }
 
-enum EditorManagerEvent {
-  case UpdateLocation(frameCount: Int, max: Int);
-  case Stopped();
+  enum Event {
+    case UpdateLocation(frameCount: Int, max: Int);
+    case Stopped();
+  }
 }
 
 class EditorManager(val editor: JavaEditor) {
-  val cmdQueue = new LinkedTransferQueue[EditorManagerCmd]();
-  var eventListeners = List[EditorManagerEvent => Unit]();
+  val cmdQueue = new LinkedTransferQueue[EditorManager.Cmd]();
+  var eventListeners = List[EditorManager.Event => Unit]();
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -116,7 +118,7 @@ class EditorManager(val editor: JavaEditor) {
           newVmManager.run(p)
         }
         newVmManager.listen {
-          case VmManagerEvent.UpdateLocation(frameCount, trimMax, events) => {
+          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
             this.frameCount = frameCount;
             this.maxFrameCount = if (trimMax) {
               frameCount
@@ -138,16 +140,16 @@ class EditorManager(val editor: JavaEditor) {
             }
             this.eventListeners.foreach(
               _(
-                EditorManagerEvent.UpdateLocation(
+                EditorManager.Event.UpdateLocation(
                   frameCount,
                   this.maxFrameCount
                 )
               )
             )
           }
-          case VmManagerEvent.Stopped() => {
+          case VmManager.Event.Stopped() => {
             this.running = false;
-            this.eventListeners.foreach(_(EditorManagerEvent.Stopped()))
+            this.eventListeners.foreach(_(EditorManager.Event.Stopped()))
           }
         }
         p.future.map(_ => newVmManager)
@@ -165,7 +167,7 @@ class EditorManager(val editor: JavaEditor) {
     for {
       _ <- {
         val p = Promise[Unit]();
-        oldVmManager.cmdQueue.put(VmManagerCmd.Exit(p));
+        oldVmManager.cmdQueue.put(VmManager.Cmd.Exit(p));
         p.future
       }
       _ <- Future {
@@ -180,7 +182,7 @@ class EditorManager(val editor: JavaEditor) {
       while (!isExit) {
         val cmd = cmdQueue.take();
         cmd match {
-          case EditorManagerCmd.ReloadSketch(done) => {
+          case EditorManager.Cmd.ReloadSketch(done) => {
             vmManager match {
               case Some(_) => {
                 try {
@@ -206,7 +208,7 @@ class EditorManager(val editor: JavaEditor) {
               }
             }
           }
-          case EditorManagerCmd.UpdateLocation(frameCount, done) => {
+          case EditorManager.Cmd.UpdateLocation(frameCount, done) => {
             vmManager match {
               case Some(_) => {
                 Await.ready(
@@ -227,7 +229,7 @@ class EditorManager(val editor: JavaEditor) {
               }
             }
           }
-          case EditorManagerCmd.StartSketch(done) => {
+          case EditorManager.Cmd.StartSketch(done) => {
             vmManager match {
               case Some(_) => {
                 done.failure(new Exception("vm is already running"));
@@ -250,12 +252,12 @@ class EditorManager(val editor: JavaEditor) {
               }
             }
           }
-          case EditorManagerCmd.PauseSketch(done) => {
+          case EditorManager.Cmd.PauseSketch(done) => {
             vmManager match {
               case Some(vmManager) => {
                 Await.ready(
                   {
-                    vmManager.cmdQueue.put(VmManagerCmd.PauseSketch(done))
+                    vmManager.cmdQueue.put(VmManager.Cmd.PauseSketch(done))
                     done.future
                   },
                   Duration.Inf
@@ -267,12 +269,12 @@ class EditorManager(val editor: JavaEditor) {
               }
             }
           }
-          case EditorManagerCmd.ResumeSketch(done) => {
+          case EditorManager.Cmd.ResumeSketch(done) => {
             vmManager match {
               case Some(vmManager) => {
                 Await.ready(
                   {
-                    vmManager.cmdQueue.put(VmManagerCmd.ResumeSketch(done))
+                    vmManager.cmdQueue.put(VmManager.Cmd.ResumeSketch(done))
                     done.future
                   },
                   Duration.Inf
@@ -284,7 +286,7 @@ class EditorManager(val editor: JavaEditor) {
               }
             }
           }
-          case EditorManagerCmd.Exit(done) => {
+          case EditorManager.Cmd.Exit(done) => {
             vmManager match {
               case Some(vmManager) => {
                 Await.ready(
@@ -310,7 +312,7 @@ class EditorManager(val editor: JavaEditor) {
     }).start();
   }
 
-  def listen(listener: EditorManagerEvent => Unit) = {
+  def listen(listener: EditorManager.Event => Unit) = {
     eventListeners = listener :: eventListeners;
   }
 }

@@ -66,30 +66,33 @@ import net.kgtkr.seekprog.ext._;
 import net.kgtkr.seekprog.tool.SeekprogTool
 import scala.concurrent.Promise
 
-enum VmManagerCmd {
-  val done: Promise[Unit];
+object VmManager {
+  enum Cmd {
+    val done: Promise[Unit];
 
-  case StartSketch(done: Promise[Unit]) // for internal
-  case PauseSketch(done: Promise[Unit])
-  case ResumeSketch(done: Promise[Unit])
-  case Exit(done: Promise[Unit])
-}
+    case StartSketch(done: Promise[Unit]) // for internal
+    case PauseSketch(done: Promise[Unit])
+    case ResumeSketch(done: Promise[Unit])
+    case Exit(done: Promise[Unit])
+  }
 
-enum VmManagerEvent {
-  case UpdateLocation(
-      frameCount: Int,
-      trimMax: Boolean,
-      events: List[List[PdeEventWrapper]]
-  );
-  case Stopped();
+  enum Event {
+    case UpdateLocation(
+        frameCount: Int,
+        trimMax: Boolean,
+        events: List[List[PdeEventWrapper]]
+    );
+    case Stopped();
+  }
+
 }
 
 class VmManager(
     val editorManager: EditorManager
 ) {
-  val cmdQueue = new LinkedTransferQueue[VmManagerCmd]();
-  var eventListeners = List[VmManagerEvent => Unit]();
-  var progressCmd: Option[VmManagerCmd] = None;
+  val cmdQueue = new LinkedTransferQueue[VmManager.Cmd]();
+  var eventListeners = List[VmManager.Event => Unit]();
+  var progressCmd: Option[VmManager.Cmd] = None;
   var running = false;
 
   def run(done: Promise[Unit]) = {
@@ -196,7 +199,7 @@ class VmManager(
         ()
       });
     runtimeEventThread.start();
-    this.progressCmd = Some(VmManagerCmd.StartSketch(done));
+    this.progressCmd = Some(VmManager.Cmd.StartSketch(done));
 
     new Thread(() => {
       try {
@@ -286,11 +289,11 @@ class VmManager(
               progressCmd = Some(cmd);
 
               cmd match {
-                case VmManagerCmd.StartSketch(done) => {
+                case VmManager.Cmd.StartSketch(done) => {
                   progressCmd = None;
                   done.failure(new Exception("already started"));
                 }
-                case VmManagerCmd.PauseSketch(done) => {
+                case VmManager.Cmd.PauseSketch(done) => {
                   if (!running) {
                     progressCmd = None;
                     done.failure(new Exception("already paused"));
@@ -300,7 +303,7 @@ class VmManager(
                   }
 
                 }
-                case VmManagerCmd.ResumeSketch(done) => {
+                case VmManager.Cmd.ResumeSketch(done) => {
                   if (running) {
                     progressCmd = None;
                     done.failure(new Exception("already running"));
@@ -309,7 +312,7 @@ class VmManager(
                     running = true;
                   }
                 }
-                case VmManagerCmd.Exit(done) => {
+                case VmManager.Cmd.Exit(done) => {
                   running = false;
                   vm.exit(0);
                   runtimeEventThread.interrupt();
@@ -330,7 +333,7 @@ class VmManager(
             event match {
               case RuntimeEvent.OnTargetFrameCount => {
                 progressCmd match {
-                  case Some(VmManagerCmd.StartSketch(done)) => {
+                  case Some(VmManager.Cmd.StartSketch(done)) => {
                     progressCmd = None;
                     done.success(());
                   }
@@ -343,7 +346,7 @@ class VmManager(
                     .OnUpdateLocation(frameCount, trimMax, events) => {
                 eventListeners.foreach(
                   _(
-                    VmManagerEvent.UpdateLocation(
+                    VmManager.Event.UpdateLocation(
                       frameCount,
                       trimMax,
                       events
@@ -353,7 +356,7 @@ class VmManager(
               }
               case RuntimeEvent.OnPaused => {
                 progressCmd match {
-                  case Some(cmd: VmManagerCmd.PauseSketch) => {
+                  case Some(cmd: VmManager.Cmd.PauseSketch) => {
                     progressCmd = None;
                     cmd.done.success(());
                   }
@@ -364,7 +367,7 @@ class VmManager(
               }
               case RuntimeEvent.OnResumed => {
                 progressCmd match {
-                  case Some(cmd: VmManagerCmd.ResumeSketch) => {
+                  case Some(cmd: VmManager.Cmd.ResumeSketch) => {
                     progressCmd = None;
                     cmd.done.success(());
                   }
@@ -395,14 +398,14 @@ class VmManager(
         progressCmd = None;
         this.eventListeners.foreach(
           _(
-            VmManagerEvent.Stopped()
+            VmManager.Event.Stopped()
           )
         )
       }
     }).start();
   }
 
-  def listen(listener: VmManagerEvent => Unit) = {
+  def listen(listener: VmManager.Event => Unit) = {
     eventListeners = listener :: eventListeners;
   }
 }

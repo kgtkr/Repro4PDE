@@ -108,7 +108,7 @@ object ControlPanel {
                     if (!loading.value) {
                       loading.value = true
                       editorManager.cmdQueue.add(
-                        EditorManagerCmd.ReloadSketch(donePromise())
+                        EditorManager.Cmd.ReloadSketch(donePromise())
                       )
                     }
                   }
@@ -139,7 +139,7 @@ object ControlPanel {
           Platform.runLater {
             loading.value = true
             editorManager.cmdQueue.add(
-              EditorManagerCmd.Exit(donePromise())
+              EditorManager.Cmd.Exit(donePromise())
             );
             frame.dispose()
             fileWatchThread.interrupt();
@@ -160,7 +160,7 @@ object ControlPanel {
                     if (oldChanging && !changing && !loading.value) {
                       loading.value = true
                       editorManager.cmdQueue.add(
-                        EditorManagerCmd.UpdateLocation(
+                        EditorManager.Cmd.UpdateLocation(
                           (value.value * 60).toInt,
                           donePromise()
                         )
@@ -172,14 +172,14 @@ object ControlPanel {
                 editorManager.listen { event =>
                   Platform.runLater {
                     event match {
-                      case EditorManagerEvent
+                      case EditorManager.Event
                             .UpdateLocation(value2, max2) => {
                         slider.max = max2.toDouble / 60
                         if (!slider.valueChanging.value) {
                           slider.value = value2.toDouble / 60
                         }
                       }
-                      case EditorManagerEvent.Stopped() => {
+                      case EditorManager.Event.Stopped() => {
                         playerState.value = PlayerState.Stopped
                       }
                     }
@@ -219,7 +219,7 @@ object ControlPanel {
                         case PlayerState.Playing => {
                           loading.value = true
                           editorManager.cmdQueue.add(
-                            EditorManagerCmd.PauseSketch(donePromise {
+                            EditorManager.Cmd.PauseSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Paused;
                               }
@@ -229,7 +229,7 @@ object ControlPanel {
                         case PlayerState.Paused => {
                           loading.value = true
                           editorManager.cmdQueue.add(
-                            EditorManagerCmd.ResumeSketch(donePromise {
+                            EditorManager.Cmd.ResumeSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Playing;
                               }
@@ -239,7 +239,7 @@ object ControlPanel {
                         case PlayerState.Stopped => {
                           loading.value = true
                           editorManager.cmdQueue.add(
-                            EditorManagerCmd.StartSketch(donePromise {
+                            EditorManager.Cmd.StartSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Playing;
                               }
