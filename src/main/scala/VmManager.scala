@@ -145,6 +145,8 @@ class VmManager(
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
     val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
+    val frameCount = editorManager.frameCount;
+    val pdeEvents = editorManager.pdeEvents;
 
     val runtimeEventThread =
       new Thread(() => {
@@ -255,9 +257,9 @@ class VmManager(
                         .get(0),
                       Arrays.asList(
                         instance,
-                        vm.mirrorOf(editorManager.frameCount),
+                        vm.mirrorOf(frameCount),
                         vm.mirrorOf(
-                          editorManager.pdeEvents.toList.asJson.noSpaces
+                          pdeEvents.toList.asJson.noSpaces
                         ),
                         vm.mirrorOf(!running)
                       ),
