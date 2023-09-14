@@ -94,6 +94,7 @@ class VmManager(
   var eventListeners = List[VmManager.Event => Unit]();
   var progressCmd: Option[VmManager.Cmd] = None;
   var running = false;
+  val build = editorManager.builds.last;
 
   def run(done: Promise[Unit]) = {
     var isExpectedExit = false;
@@ -117,20 +118,20 @@ class VmManager(
       "tool"
     );
     running = editorManager.running;
-    val build = editorManager.builds.last.javaBuild;
+    val javaBuild = build.javaBuild;
     val runner =
-      new Runner(build, new RunnerListenerEdtAdapter(editorManager.editor));
+      new Runner(javaBuild, new RunnerListenerEdtAdapter(editorManager.editor));
 
     val cp = toolDir
       .listFiles()
       .map(File.pathSeparator + _.getAbsolutePath())
       .mkString("");
     val classPathField =
-      build.getClass().getDeclaredField("classPath");
+      javaBuild.getClass().getDeclaredField("classPath");
     classPathField.setAccessible(true);
     classPathField.set(
-      build,
-      build.getClassPath()
+      javaBuild,
+      javaBuild.getClassPath()
         + cp
     );
 
@@ -139,7 +140,7 @@ class VmManager(
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();
-    classPrepareRequest.addClassFilter(build.getSketchClassName());
+    classPrepareRequest.addClassFilter(javaBuild.getSketchClassName());
     classPrepareRequest.enable();
 
     val exceptionRequest =
@@ -212,7 +213,7 @@ class VmManager(
             evt match {
               case evt: ClassPrepareEvent => {
                 val classType = evt.referenceType().asInstanceOf[ClassType];
-                if (classType.name() == build.getSketchClassName()) {
+                if (classType.name() == javaBuild.getSketchClassName()) {
                   vm.eventRequestManager()
                     .createBreakpointRequest(
                       classType.methodsByName("settings").get(0).location()

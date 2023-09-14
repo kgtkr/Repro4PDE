@@ -58,6 +58,7 @@ import scala.concurrent.blocking
 import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.collection.mutable.Map as MMap
 
 object EditorManager {
   enum Cmd {
@@ -78,6 +79,8 @@ object EditorManager {
     case UpdateLocation(frameCount: Int, max: Int);
     case Stopped();
   }
+
+  class VmManagers(var master: VmManager, val slaves: MMap[Int, VmManager]) {}
 }
 
 class EditorManager(val editor: JavaEditor) {
@@ -89,7 +92,7 @@ class EditorManager(val editor: JavaEditor) {
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var running = false;
   val builds = Buffer[Build]();
-  var vmManager: Option[VmManager] = None;
+  var vmManagers: Option[EditorManager.VmManagers] = None;
 
   private def updateBuild() = {
     try {
@@ -107,7 +110,7 @@ class EditorManager(val editor: JavaEditor) {
   }
 
   private def startVm() = {
-    assert(vmManager.isEmpty);
+    assert(vmManagers.isEmpty);
     editor.statusEmpty();
 
     for {
@@ -155,14 +158,14 @@ class EditorManager(val editor: JavaEditor) {
         p.future.map(_ => newVmManager)
       }
       _ <- Future {
-        vmManager = Some(newVmManager)
+        vmManagers = Some(new EditorManager.VmManagers(newVmManager, MMap()))
       }
     } yield ()
   }
 
   private def exitVm() = {
-    assert(vmManager.isDefined);
-    val oldVmManager = vmManager.get;
+    assert(vmManagers.isDefined);
+    val oldVmManager = vmManagers.get.master;
 
     for {
       _ <- {
@@ -171,7 +174,7 @@ class EditorManager(val editor: JavaEditor) {
         p.future
       }
       _ <- Future {
-        vmManager = None;
+        vmManagers = None;
       }
     } yield ()
   }
@@ -183,7 +186,7 @@ class EditorManager(val editor: JavaEditor) {
         val cmd = cmdQueue.take();
         cmd match {
           case EditorManager.Cmd.ReloadSketch(done) => {
-            vmManager match {
+            vmManagers match {
               case Some(_) => {
                 try {
                   this.updateBuild();
@@ -209,7 +212,7 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManager.Cmd.UpdateLocation(frameCount, done) => {
-            vmManager match {
+            vmManagers match {
               case Some(_) => {
                 Await.ready(
                   done
@@ -230,7 +233,7 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManager.Cmd.StartSketch(done) => {
-            vmManager match {
+            vmManagers match {
               case Some(_) => {
                 done.failure(new Exception("vm is already running"));
               }
@@ -253,11 +256,13 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManager.Cmd.PauseSketch(done) => {
-            vmManager match {
-              case Some(vmManager) => {
+            vmManagers match {
+              case Some(vmManagers) => {
                 Await.ready(
                   {
-                    vmManager.cmdQueue.put(VmManager.Cmd.PauseSketch(done))
+                    vmManagers.master.cmdQueue.put(
+                      VmManager.Cmd.PauseSketch(done)
+                    )
                     done.future
                   },
                   Duration.Inf
@@ -270,11 +275,13 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManager.Cmd.ResumeSketch(done) => {
-            vmManager match {
-              case Some(vmManager) => {
+            vmManagers match {
+              case Some(vmManagers) => {
                 Await.ready(
                   {
-                    vmManager.cmdQueue.put(VmManager.Cmd.ResumeSketch(done))
+                    vmManagers.master.cmdQueue.put(
+                      VmManager.Cmd.ResumeSketch(done)
+                    )
                     done.future
                   },
                   Duration.Inf
@@ -287,8 +294,8 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
           case EditorManager.Cmd.Exit(done) => {
-            vmManager match {
-              case Some(vmManager) => {
+            vmManagers match {
+              case Some(_) => {
                 Await.ready(
                   done
                     .completeWith(exitVm())
