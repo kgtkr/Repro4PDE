@@ -75,6 +75,7 @@ object VmManager {
     case ResumeSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
     case AddedEvents(events: List[List[PdeEventWrapper]], done: Promise[Unit]);
+    case LimitFrameCount(frameCount: Int, done: Promise[Unit]);
   }
 
   enum Event {
@@ -209,7 +210,7 @@ class VmManager(
     new Thread(() => {
       try {
         while (true) {
-          val eventSet = Option(vm.eventQueue().remove(200))
+          val eventSet = Option(vm.eventQueue().remove(100))
             .map(_.asScala)
             .getOrElse(Seq.empty);
           for (evt <- eventSet) {
@@ -292,52 +293,67 @@ class VmManager(
             }
           }
 
-          if (progressCmd.isEmpty) {
-            Option(cmdQueue.poll()).foreach(cmd => {
-              progressCmd = Some(cmd);
-
-              cmd match {
-                case VmManager.Cmd.StartSketch(done) => {
-                  progressCmd = None;
-                  done.failure(new Exception("already started"));
-                }
-                case VmManager.Cmd.PauseSketch(done) => {
-                  if (!running) {
-                    progressCmd = None;
-                    done.failure(new Exception("already paused"));
-                  } else {
-                    runtimeCmdQueue.add(RuntimeCmd.Pause());
-                    running = false;
-                  }
-
-                }
-                case VmManager.Cmd.ResumeSketch(done) => {
-                  if (running) {
-                    progressCmd = None;
-                    done.failure(new Exception("already running"));
-                  } else {
-                    runtimeCmdQueue.add(RuntimeCmd.Resume());
-                    running = true;
-                  }
-                }
-                case VmManager.Cmd.Exit(done) => {
-                  running = false;
-                  vm.exit(0);
-                  runtimeEventThread.interrupt();
-                  isExpectedExit = true;
-
-                  progressCmd = None;
-                  done.success(());
-                }
-                case VmManager.Cmd.AddedEvents(events, done) => {
-                  runtimeCmdQueue.add(
-                    RuntimeCmd.AddedEvents(events)
-                  );
-                  progressCmd = None;
-                  done.success(());
+          for (
+            cmd <- Iterator
+              .continually {
+                if (progressCmd.isEmpty) {
+                  Option(cmdQueue.poll())
+                } else {
+                  None
                 }
               }
-            })
+              .mapWhile(identity)
+          ) {
+            progressCmd = Some(cmd);
+
+            cmd match {
+              case VmManager.Cmd.StartSketch(done) => {
+                progressCmd = None;
+                done.failure(new Exception("already started"));
+              }
+              case VmManager.Cmd.PauseSketch(done) => {
+                if (!running) {
+                  progressCmd = None;
+                  done.failure(new Exception("already paused"));
+                } else {
+                  runtimeCmdQueue.add(RuntimeCmd.Pause());
+                  running = false;
+                }
+
+              }
+              case VmManager.Cmd.ResumeSketch(done) => {
+                if (running) {
+                  progressCmd = None;
+                  done.failure(new Exception("already running"));
+                } else {
+                  runtimeCmdQueue.add(RuntimeCmd.Resume());
+                  running = true;
+                }
+              }
+              case VmManager.Cmd.Exit(done) => {
+                running = false;
+                vm.exit(0);
+                runtimeEventThread.interrupt();
+                isExpectedExit = true;
+
+                progressCmd = None;
+                done.success(());
+              }
+              case VmManager.Cmd.AddedEvents(events, done) => {
+                runtimeCmdQueue.add(
+                  RuntimeCmd.AddedEvents(events)
+                );
+                progressCmd = None;
+                done.success(());
+              }
+              case VmManager.Cmd.LimitFrameCount(frameCount, done) => {
+                runtimeCmdQueue.add(
+                  RuntimeCmd.LimitFrameCount(frameCount)
+                );
+                progressCmd = None;
+                done.success(());
+              }
+            }
           }
 
           for (

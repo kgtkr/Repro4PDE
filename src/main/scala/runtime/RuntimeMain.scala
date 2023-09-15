@@ -31,6 +31,7 @@ object RuntimeMain {
   var surface: PSurfaceAWTRuntime = null;
   var slaveMode = false;
   val addedEventsQueue = new LinkedTransferQueue[List[List[PdeEventWrapper]]]();
+  var frameCountLimit = Int.MaxValue;
 
   def init(
       sketch: PApplet,
@@ -86,6 +87,9 @@ object RuntimeMain {
               }
               case RuntimeCmd.AddedEvents(events) => {
                 addedEventsQueue.put(events);
+              }
+              case RuntimeCmd.LimitFrameCount(frameCount) => {
+                frameCountLimit = frameCount;
               }
             }
             sBuf.setLength(0);

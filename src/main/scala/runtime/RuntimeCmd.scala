@@ -20,6 +20,8 @@ enum RuntimeCmd {
   case Resume();
   // slave mode only
   case AddedEvents(events: List[List[PdeEventWrapper]]);
+  // master mode only
+  case LimitFrameCount(frameCount: Int);
 
   def toBytes(): ByteBuffer = {
     ByteBuffer.wrap(

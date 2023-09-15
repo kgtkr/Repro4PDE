@@ -84,7 +84,9 @@ object EditorManager {
     case CreatedBuild(build: Build);
   }
 
-  class SlaveVm(val vm: VmManager, var pdeEventCount: Int) {}
+  class SlaveVm(val vm: VmManager, var pdeEventCount: Int) {
+    var frameCount = Int.MaxValue;
+  }
 
   class VmManagers(var master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 }
@@ -122,6 +124,21 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
+  private def updateSlaveVms() = {
+    assert(vmManagers.isDefined);
+    val oldVmManagers = vmManagers.get;
+    val oldVmManager = oldVmManagers.master;
+    val minFrameCount = oldVmManagers.slaves.values
+      .map(_.frameCount)
+      .minOption
+      .getOrElse(Int.MaxValue);
+
+    // TODO: promiseを処理するべき
+    oldVmManager.cmdQueue.put(
+      VmManager.Cmd.LimitFrameCount(minFrameCount, Promise[Unit]())
+    )
+  }
+
   private def startVm() = {
     assert(vmManagers.isEmpty);
     editor.statusEmpty();
@@ -130,7 +147,7 @@ class EditorManager(val editor: JavaEditor) {
       slaveVms <- Future
         .traverse(slaves.toSeq) { id =>
           startSlaveVm(id).map(
-            (id -> new EditorManager.SlaveVm(_, this.frameCount))
+            (id -> _)
           )
         }
         .map(MMap(_: _*))
@@ -196,6 +213,7 @@ class EditorManager(val editor: JavaEditor) {
         vmManagers = Some(
           new EditorManager.VmManagers(newVmManager, slaveVms)
         )
+        updateSlaveVms();
       }
     } yield ()
   }
@@ -205,13 +223,19 @@ class EditorManager(val editor: JavaEditor) {
     for {
       newVmManager <- {
         val p = Promise[Unit]();
-        val newVmManager = new VmManager(this, Some(buildId));
+        val newVmManager = new EditorManager.SlaveVm(
+          new VmManager(this, Some(buildId)),
+          this.frameCount
+        );
         blocking {
-          newVmManager.run(p)
+          newVmManager.vm.run(p)
         }
-        newVmManager.listen {
-          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {}
-          case VmManager.Event.Stopped()                                   => {}
+        newVmManager.vm.listen {
+          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
+            newVmManager.frameCount = frameCount;
+            updateSlaveVms();
+          }
+          case VmManager.Event.Stopped() => {}
         }
         p.future.map(_ => newVmManager)
       }
@@ -388,15 +412,14 @@ class EditorManager(val editor: JavaEditor) {
                         vm <- startSlaveVm(id)
                         _ <- Future {
                           assert(!vmManagers.slaves.contains(id));
-                          vmManagers.slaves += (id -> new EditorManager.SlaveVm(
-                            vm,
-                            this.frameCount
-                          ));
+                          vmManagers.slaves += (id -> vm);
                         }
                       } yield ())
                       .future,
                     Duration.Inf
                   )
+
+                  updateSlaveVms();
                 }
                 case None => {
                   done.success(());
@@ -431,6 +454,7 @@ class EditorManager(val editor: JavaEditor) {
                         }
                         _ <- Future {
                           vmManagers.slaves -= id;
+                          updateSlaveVms();
                         }
                       } yield ())
                       .future,

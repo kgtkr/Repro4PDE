@@ -23,6 +23,7 @@ import java.awt.event.{
   MouseWheelListener,
   KeyListener
 }
+import net.kgtkr.seekprog.ext._;
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   var mouseListeners: Array[MouseListener] = null;
@@ -138,9 +139,20 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
           ) {
             RuntimeMain.events ++= RuntimeMain.addedEventsQueue.take();
           }
+
+          val addSleepTime =
+            if (sketch.frameCount >= RuntimeMain.frameCountLimit) {
+              val diff = sketch.frameCount - RuntimeMain.frameCountLimit;
+              // 10フレームかけて均一化する計算
+              diff * 1000 / 60 / 10
+            } else {
+              0
+            }
+
           val afterTime = System.nanoTime();
           val timeDiff = afterTime - beforeTime;
-          val sleepTime = (frameRatePeriod - timeDiff) - overSleepTime;
+          val sleepTime =
+            (frameRatePeriod + addSleepTime - timeDiff) - overSleepTime;
 
           if (sleepTime > 0) { // some time left in this cycle
             try {
