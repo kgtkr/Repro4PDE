@@ -20,7 +20,7 @@ import processing.core.PConstants
 
 object RuntimeMain {
   var targetFrameCount = 0;
-  var events: Vector[List[PdeEventWrapper]] = Vector();
+  val events: Buffer[List[PdeEventWrapper]] = Buffer();
   private var socketChannel: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
   var paused = false;
@@ -29,6 +29,7 @@ object RuntimeMain {
   val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
   var surface: PSurfaceAWTRuntime = null;
   var slaveMode = false;
+  val addedEventsQueue = new LinkedTransferQueue[List[List[PdeEventWrapper]]]();
 
   def init(
       sketch: PApplet,
@@ -49,7 +50,9 @@ object RuntimeMain {
     }
 
     this.targetFrameCount = targetFrameCount;
-    this.events = decode[List[List[PdeEventWrapper]]](events).right.get.toVector
+    this.events ++= decode[List[List[PdeEventWrapper]]](
+      events
+    ).right.get
     this.socketChannel = {
       val sockPath = Path.of(sketch.args(0));
       val sockAddr = UnixDomainSocketAddress.of(sockPath);
@@ -80,6 +83,9 @@ object RuntimeMain {
                 paused = false;
                 resumeQueue.put(());
               }
+              case RuntimeCmd.AddedEvents(events) => {
+                addedEventsQueue.put(events);
+              }
             }
             sBuf.setLength(0);
           }
@@ -90,8 +96,7 @@ object RuntimeMain {
     }).start();
     this.sketchHandler = new SketchHandler(
       sketch,
-      RuntimeMain.targetFrameCount,
-      RuntimeMain.events
+      RuntimeMain.targetFrameCount
     );
 
     sketch.registerMethod("pre", sketchHandler);

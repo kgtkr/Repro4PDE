@@ -133,6 +133,11 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
               RuntimeEvent.OnResumed
             );
           }
+          while (
+            RuntimeMain.slaveMode && RuntimeMain.events.length <= sketch.frameCount
+          ) {
+            RuntimeMain.events ++= RuntimeMain.addedEventsQueue.take();
+          }
           val afterTime = System.nanoTime();
           val timeDiff = afterTime - beforeTime;
           val sleepTime = (frameRatePeriod - timeDiff) - overSleepTime;

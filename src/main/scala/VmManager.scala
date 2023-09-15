@@ -74,6 +74,7 @@ object VmManager {
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
+    case AddedEvents(events: List[List[PdeEventWrapper]], done: Promise[Unit]);
   }
 
   enum Event {
@@ -266,7 +267,9 @@ class VmManager(
                         instance,
                         vm.mirrorOf(frameCount),
                         vm.mirrorOf(
-                          pdeEvents.toList.asJson.noSpaces
+                          (if (slaveBuildId.isDefined)
+                             pdeEvents.toList.take(frameCount)
+                           else pdeEvents.toList).asJson.noSpaces
                         ),
                         vm.mirrorOf(!running),
                         vm.mirrorOf(slaveBuildId.isDefined)
@@ -323,6 +326,13 @@ class VmManager(
                   runtimeEventThread.interrupt();
                   isExpectedExit = true;
 
+                  progressCmd = None;
+                  done.success(());
+                }
+                case VmManager.Cmd.AddedEvents(events, done) => {
+                  runtimeCmdQueue.add(
+                    RuntimeCmd.AddedEvents(events)
+                  );
                   progressCmd = None;
                   done.success(());
                 }

@@ -18,6 +18,8 @@ object RuntimeCmd {
 enum RuntimeCmd {
   case Pause();
   case Resume();
+  // slave mode only
+  case AddedEvents(events: List[List[PdeEventWrapper]]);
 
   def toBytes(): ByteBuffer = {
     ByteBuffer.wrap(

@@ -84,7 +84,9 @@ object EditorManager {
     case CreatedBuild(build: Build);
   }
 
-  class VmManagers(var master: VmManager, val slaves: MMap[Int, VmManager]) {}
+  class SlaveVm(val vm: VmManager, var pdeEventCount: Int) {}
+
+  class VmManagers(var master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 }
 
 class EditorManager(val editor: JavaEditor) {
@@ -125,6 +127,13 @@ class EditorManager(val editor: JavaEditor) {
     editor.statusEmpty();
 
     for {
+      slaveVms <- Future
+        .traverse(slaves.toSeq) { id =>
+          startSlaveVm(id).map(
+            (id -> new EditorManager.SlaveVm(_, this.frameCount))
+          )
+        }
+        .map(MMap(_: _*))
       newVmManager <- {
         val p = Promise[Unit]();
         val newVmManager = new VmManager(this);
@@ -132,6 +141,7 @@ class EditorManager(val editor: JavaEditor) {
           newVmManager.run(p)
         }
         newVmManager.listen {
+          // TODO: スレッドセーフじゃない
           case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
             this.frameCount = frameCount;
             this.maxFrameCount = if (trimMax) {
@@ -152,6 +162,20 @@ class EditorManager(val editor: JavaEditor) {
             for ((event, i) <- events.zipWithIndex) {
               this.pdeEvents(frameCount - events.length + i) = event;
             }
+            for ((_, slaveVm) <- slaveVms) {
+              slaveVm.vm.cmdQueue.put(
+                VmManager.Cmd.AddedEvents(
+                  pdeEvents
+                    .take(
+                      frameCount
+                    )
+                    .drop(slaveVm.pdeEventCount)
+                    .toList,
+                  Promise[Unit]()
+                )
+              );
+              slaveVm.pdeEventCount = frameCount;
+            }
             this.eventListeners.foreach(
               _(
                 EditorManager.Event.UpdateLocation(
@@ -168,12 +192,9 @@ class EditorManager(val editor: JavaEditor) {
         }
         p.future.map(_ => newVmManager)
       }
-      slaveVms <- Future.traverse(slaves.toSeq) { id =>
-        startSlaveVm(id).map((id -> _))
-      }
       _ <- Future {
         vmManagers = Some(
-          new EditorManager.VmManagers(newVmManager, MMap(slaveVms: _*))
+          new EditorManager.VmManagers(newVmManager, slaveVms)
         )
       }
     } yield ()
@@ -209,9 +230,9 @@ class EditorManager(val editor: JavaEditor) {
         p.future
       }
       _ <- Future.traverse(oldVmManagers.slaves.toSeq) {
-        case (id, vmManager) => {
+        case (id, slaveVm) => {
           val p = Promise[Unit]();
-          vmManager.cmdQueue.put(VmManager.Cmd.Exit(p));
+          slaveVm.vm.cmdQueue.put(VmManager.Cmd.Exit(p));
           p.future
         }
       }
@@ -367,13 +388,15 @@ class EditorManager(val editor: JavaEditor) {
                         vm <- startSlaveVm(id)
                         _ <- Future {
                           assert(!vmManagers.slaves.contains(id));
-                          vmManagers.slaves += (id -> vm);
+                          vmManagers.slaves += (id -> new EditorManager.SlaveVm(
+                            vm,
+                            this.frameCount
+                          ));
                         }
                       } yield ())
                       .future,
                     Duration.Inf
                   )
-                  done.success(());
                 }
                 case None => {
                   done.success(());
@@ -399,6 +422,7 @@ class EditorManager(val editor: JavaEditor) {
                           val done = Promise[Unit]();
                           vmManagers
                             .slaves(id)
+                            .vm
                             .cmdQueue
                             .put(
                               VmManager.Cmd.Exit(done)
@@ -412,7 +436,6 @@ class EditorManager(val editor: JavaEditor) {
                       .future,
                     Duration.Inf
                   )
-                  done.success(());
                 }
                 case None => {
                   done.success(());

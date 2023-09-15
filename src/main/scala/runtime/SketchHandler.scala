@@ -16,8 +16,7 @@ import scala.util.Try
 
 class SketchHandler(
     applet: PApplet,
-    targetFrameCount: Int,
-    reproductionEvents: Vector[List[PdeEventWrapper]]
+    targetFrameCount: Int
 ) {
   var onTarget = false;
   val currentFrameEvents = Buffer[PdeEventWrapper]();
@@ -59,7 +58,7 @@ class SketchHandler(
     }
 
     if (!this.stopReproductionEvent) {
-      Try(this.reproductionEvents(this.applet.frameCount - 1)).toOption
+      Try(RuntimeMain.events(this.applet.frameCount - 1)).toOption
         .foreach {
           _.foreach {
             case PdeEventWrapper.Mouse(evt) =>
@@ -74,7 +73,7 @@ class SketchHandler(
       this.currentFrameEvents.clear();
     }
 
-    if (this.onTarget && this.applet.frameCount % 60 == 0) {
+    if (this.onTarget && this.applet.frameCount % 10 == 0) {
       RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent
           .OnUpdateLocation(
