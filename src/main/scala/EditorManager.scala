@@ -168,21 +168,52 @@ class EditorManager(val editor: JavaEditor) {
         }
         p.future.map(_ => newVmManager)
       }
+      slaveVms <- Future.traverse(slaves.toSeq) { id =>
+        startSlaveVm(id).map((id -> _))
+      }
       _ <- Future {
-        vmManagers = Some(new EditorManager.VmManagers(newVmManager, MMap()))
+        vmManagers = Some(
+          new EditorManager.VmManagers(newVmManager, MMap(slaveVms: _*))
+        )
       }
     } yield ()
   }
 
+  private def startSlaveVm(buildId: Int) = {
+    // 起動しなくても実行は続けたいのでエラーをうまく無視するべき
+    for {
+      newVmManager <- {
+        val p = Promise[Unit]();
+        val newVmManager = new VmManager(this, Some(buildId));
+        blocking {
+          newVmManager.run(p)
+        }
+        newVmManager.listen {
+          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {}
+          case VmManager.Event.Stopped()                                   => {}
+        }
+        p.future.map(_ => newVmManager)
+      }
+    } yield newVmManager
+  }
+
   private def exitVm() = {
     assert(vmManagers.isDefined);
-    val oldVmManager = vmManagers.get.master;
+    val oldVmManagers = vmManagers.get;
+    val oldVmManager = oldVmManagers.master;
 
     for {
       _ <- {
         val p = Promise[Unit]();
         oldVmManager.cmdQueue.put(VmManager.Cmd.Exit(p));
         p.future
+      }
+      _ <- Future.traverse(oldVmManagers.slaves.toSeq) {
+        case (id, vmManager) => {
+          val p = Promise[Unit]();
+          vmManager.cmdQueue.put(VmManager.Cmd.Exit(p));
+          p.future
+        }
       }
       _ <- Future {
         vmManagers = None;
@@ -324,12 +355,70 @@ class EditorManager(val editor: JavaEditor) {
             isExit = true;
           }
           case EditorManager.Cmd.AddSlave(id, done) => {
-            slaves += id;
-            done.success(());
+            if (slaves.contains(id)) {
+              done.failure(new Exception("slave is already added"));
+            } else {
+              slaves += id;
+              vmManagers match {
+                case Some(vmManagers) => {
+                  Await.ready(
+                    done
+                      .completeWith(for {
+                        vm <- startSlaveVm(id)
+                        _ <- Future {
+                          assert(!vmManagers.slaves.contains(id));
+                          vmManagers.slaves += (id -> vm);
+                        }
+                      } yield ())
+                      .future,
+                    Duration.Inf
+                  )
+                  done.success(());
+                }
+                case None => {
+                  done.success(());
+                }
+              }
+            }
+
           }
           case EditorManager.Cmd.RemoveSlave(id, done) => {
-            slaves -= id;
-            done.success(());
+            if (!slaves.contains(id)) {
+              done.failure(new Exception("slave is not added"));
+            } else {
+              slaves -= id;
+              vmManagers match {
+                case Some(vmManagers) => {
+                  Await.ready(
+                    done
+                      .completeWith(for {
+                        _ <- Future {
+                          assert(vmManagers.slaves.contains(id));
+                        }
+                        _ <- {
+                          val done = Promise[Unit]();
+                          vmManagers
+                            .slaves(id)
+                            .cmdQueue
+                            .put(
+                              VmManager.Cmd.Exit(done)
+                            );
+                          done.future
+                        }
+                        _ <- Future {
+                          vmManagers.slaves -= id;
+                        }
+                      } yield ())
+                      .future,
+                    Duration.Inf
+                  )
+                  done.success(());
+                }
+                case None => {
+                  done.success(());
+                }
+              }
+            }
           }
         }
       }

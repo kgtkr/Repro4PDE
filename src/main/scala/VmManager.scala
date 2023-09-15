@@ -88,13 +88,16 @@ object VmManager {
 }
 
 class VmManager(
-    val editorManager: EditorManager
+    val editorManager: EditorManager,
+    val slaveBuildId: Option[Int] = None
 ) {
   val cmdQueue = new LinkedTransferQueue[VmManager.Cmd]();
   var eventListeners = List[VmManager.Event => Unit]();
   var progressCmd: Option[VmManager.Cmd] = None;
   var running = false;
-  val build = editorManager.currentBuild;
+  val build = slaveBuildId
+    .map(editorManager.builds(_))
+    .getOrElse(editorManager.currentBuild);
 
   def run(done: Promise[Unit]) = {
     var isExpectedExit = false;
