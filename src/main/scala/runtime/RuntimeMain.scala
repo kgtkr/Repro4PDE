@@ -20,6 +20,7 @@ import processing.core.PConstants
 
 object RuntimeMain {
   var targetFrameCount = 0;
+  // TODO: 絶対この変数スレッドセーフじゃない
   val events: Buffer[List[PdeEventWrapper]] = Buffer();
   private var socketChannel: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
