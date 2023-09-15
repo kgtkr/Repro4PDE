@@ -94,7 +94,7 @@ class VmManager(
   var eventListeners = List[VmManager.Event => Unit]();
   var progressCmd: Option[VmManager.Cmd] = None;
   var running = false;
-  val build = editorManager.build;
+  val build = editorManager.currentBuild;
 
   def run(done: Promise[Unit]) = {
     var isExpectedExit = false;

@@ -48,16 +48,6 @@ enum PlayerState {
   case Stopped;
 }
 
-case class BuildForControlPanel(
-    id: Int
-) {
-  val selected = BooleanProperty(false)
-
-  override def toString() = {
-    s"Build ${id}"
-  }
-}
-
 object ControlPanel {
   def init() = {
     Platform.implicitExit = false;
@@ -69,7 +59,8 @@ object ControlPanel {
     val editorManager = new EditorManager(editor)
     editorManager.run()
     val playerState = ObjectProperty(PlayerState.Stopped);
-    val builds = BufferProperty[BuildForControlPanel](Seq());
+    val currentBuildIdProperty = ObjectProperty[Option[Int]](None);
+    val slaveBuildIdProperty = ObjectProperty[Option[Int]](None);
 
     def donePromise(onSuccess: => Unit = {}) = {
       import scala.concurrent.ExecutionContext.Implicits.global
@@ -201,29 +192,8 @@ object ControlPanel {
                       case EditorManager.Event.Stopped() => {
                         playerState.value = PlayerState.Stopped
                       }
-                      case EditorManager.Event.AddedPrevBuild(build) => {
-                        val buildForControlPanel =
-                          BuildForControlPanel(build.id)
-                        builds.value.insert(0, buildForControlPanel);
-                        buildForControlPanel.selected.onChange {
-                          (_, _, selected) =>
-                            loading.value = true
-                            if (selected) {
-                              editorManager.cmdQueue.add(
-                                EditorManager.Cmd.EnableSlave(
-                                  build.id,
-                                  donePromise()
-                                )
-                              )
-                            } else {
-                              editorManager.cmdQueue.add(
-                                EditorManager.Cmd.DisableSlave(
-                                  build.id,
-                                  donePromise()
-                                )
-                              )
-                            }
-                        }
+                      case EditorManager.Event.CreatedBuild(build) => {
+                        currentBuildIdProperty.value = Some(build.id)
                       }
                     }
                   }
@@ -291,23 +261,60 @@ object ControlPanel {
                         }
                       }
                     }
-                  }
-                )
-              },
-              new VBox {
-                children = Seq(
-                  new Text {
-                    text = "Prev Builds"
-                    style = "-fx-font: normal bold 10pt sans-serif"
-                    fill = White
                   },
-                  new ListView[BuildForControlPanel] {
-                    items = builds.value
-                    maxHeight = 100
-                    disable <== loading
-                    cellFactory = CheckBoxListCell.forListView(
-                      (_: BuildForControlPanel).selected
+                  new Button {
+                    text <== Bindings.createStringBinding(
+                      () =>
+                        if (slaveBuildIdProperty.value.isDefined) {
+                          "並列実行を無効化する"
+                        } else {
+                          "並列実行を有効化する"
+                        },
+                      slaveBuildIdProperty
                     )
+                    disable <==
+                      Bindings.createBooleanBinding(
+                        () =>
+                          loading.value || currentBuildIdProperty.value.isEmpty,
+                        loading,
+                        currentBuildIdProperty
+                      )
+                    onAction = _ => {
+                      currentBuildIdProperty.value match {
+                        case Some(currentBuildId) if !loading.value => {
+                          slaveBuildIdProperty.value match {
+                            case Some(slaveBuildId) => {
+                              loading.value = true
+                              editorManager.cmdQueue.add(
+                                EditorManager.Cmd.RemoveSlave(
+                                  slaveBuildId,
+                                  donePromise {
+                                    Platform.runLater {
+                                      slaveBuildIdProperty.value = None
+                                    }
+                                  }
+                                )
+                              )
+                            }
+                            case None => {
+                              loading.value = true
+                              editorManager.cmdQueue.add(
+                                EditorManager.Cmd.AddSlave(
+                                  currentBuildId,
+                                  donePromise {
+                                    Platform.runLater {
+                                      slaveBuildIdProperty.value =
+                                        Some(currentBuildId)
+                                    }
+                                  }
+                                )
+                              )
+                            }
+                          }
+                        }
+                        case _ => {}
+                      }
+                    }
                   }
                 )
               }

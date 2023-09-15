@@ -74,14 +74,14 @@ object EditorManager {
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
-    case EnableSlave(id: Int, done: Promise[Unit])
-    case DisableSlave(id: Int, done: Promise[Unit])
+    case AddSlave(id: Int, done: Promise[Unit])
+    case RemoveSlave(id: Int, done: Promise[Unit])
   }
 
   enum Event {
     case UpdateLocation(frameCount: Int, max: Int);
     case Stopped();
-    case AddedPrevBuild(build: Build);
+    case CreatedBuild(build: Build);
   }
 
   class VmManagers(var master: VmManager, val slaves: MMap[Int, VmManager]) {}
@@ -95,24 +95,22 @@ class EditorManager(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val pdeEvents = Buffer[List[PdeEventWrapper]]();
   var running = false;
-  var build: Build = null;
-  val prevBuilds = Buffer[Build]();
+  var currentBuild: Build = null;
+  val builds = Buffer[Build]();
   var vmManagers: Option[EditorManager.VmManagers] = None;
-  val enableSlaves = MSet[Int]();
+  val slaves = MSet[Int]();
 
   private def updateBuild() = {
     try {
       editor.prepareRun();
       val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
+      currentBuild = new Build(this.builds.length, javaBuild);
 
-      if (build != null) {
-        this.prevBuilds += build;
-        this.eventListeners.foreach(
-          _(EditorManager.Event.AddedPrevBuild(build))
-        );
-      }
-      build = new Build(this.prevBuilds.length, javaBuild);
+      this.builds += currentBuild;
+      this.eventListeners.foreach(
+        _(EditorManager.Event.CreatedBuild(currentBuild))
+      );
     } catch {
       case e: Exception => {
         e.printStackTrace();
@@ -325,12 +323,12 @@ class EditorManager(val editor: JavaEditor) {
 
             isExit = true;
           }
-          case EditorManager.Cmd.EnableSlave(id, done) => {
-            enableSlaves += id;
+          case EditorManager.Cmd.AddSlave(id, done) => {
+            slaves += id;
             done.success(());
           }
-          case EditorManager.Cmd.DisableSlave(id, done) => {
-            enableSlaves -= id;
+          case EditorManager.Cmd.RemoveSlave(id, done) => {
+            slaves -= id;
             done.success(());
           }
         }
