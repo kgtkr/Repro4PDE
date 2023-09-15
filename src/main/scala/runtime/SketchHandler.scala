@@ -43,7 +43,9 @@ class SketchHandler(
 
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {
       this.onTarget = true;
-      RuntimeMain.surface.enableEvent();
+      if (!RuntimeMain.slaveMode) {
+        RuntimeMain.surface.enableEvent();
+      }
       val endTime = System.nanoTime();
       val ms = (endTime - this.startTime) / 1000000.0;
       println(

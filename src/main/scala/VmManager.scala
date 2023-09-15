@@ -268,7 +268,8 @@ class VmManager(
                         vm.mirrorOf(
                           pdeEvents.toList.asJson.noSpaces
                         ),
-                        vm.mirrorOf(!running)
+                        vm.mirrorOf(!running),
+                        vm.mirrorOf(slaveBuildId.isDefined)
                       ),
                       0
                     );

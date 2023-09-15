@@ -28,14 +28,17 @@ object RuntimeMain {
   val resumeQueue = new LinkedTransferQueue[Unit]();
   val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
   var surface: PSurfaceAWTRuntime = null;
+  var slaveMode = false;
 
   def init(
       sketch: PApplet,
       targetFrameCount: Int,
       events: String,
-      initPaused: Boolean
+      initPaused: Boolean,
+      slaveMode: Boolean
   ) = {
     this.paused = initPaused;
+    this.slaveMode = slaveMode;
     this.notTriggerPausedEvent = initPaused;
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
     Class.forName(renderer);
