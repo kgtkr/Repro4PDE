@@ -159,8 +159,9 @@ object ControlPanel {
 
       Platform.runLater(() => {
         val scene = new Scene {
-          fill = Color.rgb(38, 38, 38)
+          fill = Color.rgb(240, 240, 240)
           content = new VBox {
+            style = "-fx-font: normal bold 10pt sans-serif"
             padding = Insets(50, 80, 50, 80)
             children = Seq(
               new HBox {
@@ -202,8 +203,6 @@ object ControlPanel {
                 children = Seq(
                   slider,
                   new Text {
-                    style = "-fx-font: normal bold 10pt sans-serif"
-                    fill = White
                     text <== Bindings.createStringBinding(
                       () =>
                         f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
