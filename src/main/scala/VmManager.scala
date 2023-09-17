@@ -68,6 +68,11 @@ import scala.concurrent.Promise
 import java.nio.channels.Channels
 
 object VmManager {
+  enum SlaveSyncCmd {
+    case AddedEvents(events: List[List[PdeEventWrapper]]);
+    case LimitFrameCount(frameCount: Int);
+  }
+
   enum Cmd {
     val done: Promise[Unit];
 
@@ -75,8 +80,7 @@ object VmManager {
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
-    case AddedEvents(events: List[List[PdeEventWrapper]], done: Promise[Unit]);
-    case LimitFrameCount(frameCount: Int, done: Promise[Unit]);
+
   }
 
   enum Event {
@@ -95,6 +99,7 @@ class VmManager(
     val slaveBuildId: Option[Int] = None
 ) {
   val cmdQueue = new LinkedTransferQueue[VmManager.Cmd]();
+  val slaveSyncCmdQueue = new LinkedTransferQueue[VmManager.SlaveSyncCmd]();
   var eventListeners = List[VmManager.Event => Unit]();
   var progressCmd: Option[VmManager.Cmd] = None;
   var running = false;
@@ -341,19 +346,26 @@ class VmManager(
                 progressCmd = None;
                 done.success(());
               }
-              case VmManager.Cmd.AddedEvents(events, done) => {
+            }
+          }
+
+          for (
+            cmd <- Iterator
+              .continually {
+                slaveSyncCmdQueue.poll()
+              }
+              .takeWhile(_ != null)
+          ) {
+            cmd match {
+              case VmManager.SlaveSyncCmd.AddedEvents(events) => {
                 runtimeCmdQueue.add(
                   RuntimeCmd.AddedEvents(events)
                 );
-                progressCmd = None;
-                done.success(());
               }
-              case VmManager.Cmd.LimitFrameCount(frameCount, done) => {
+              case VmManager.SlaveSyncCmd.LimitFrameCount(frameCount) => {
                 runtimeCmdQueue.add(
                   RuntimeCmd.LimitFrameCount(frameCount)
                 );
-                progressCmd = None;
-                done.success(());
               }
             }
           }

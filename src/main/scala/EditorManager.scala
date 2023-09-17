@@ -133,9 +133,8 @@ class EditorManager(val editor: JavaEditor) {
       .minOption
       .getOrElse(Int.MaxValue);
 
-    // TODO: promiseを処理するべき
-    oldVmManager.cmdQueue.put(
-      VmManager.Cmd.LimitFrameCount(minFrameCount, Promise[Unit]())
+    oldVmManager.slaveSyncCmdQueue.put(
+      VmManager.SlaveSyncCmd.LimitFrameCount(minFrameCount)
     )
   }
 
@@ -180,15 +179,14 @@ class EditorManager(val editor: JavaEditor) {
               this.pdeEvents(frameCount - events.length + i) = event;
             }
             for ((_, slaveVm) <- slaveVms) {
-              slaveVm.vm.cmdQueue.put(
-                VmManager.Cmd.AddedEvents(
+              slaveVm.vm.slaveSyncCmdQueue.put(
+                VmManager.SlaveSyncCmd.AddedEvents(
                   pdeEvents
                     .take(
                       frameCount
                     )
                     .drop(slaveVm.pdeEventCount)
-                    .toList,
-                  Promise[Unit]()
+                    .toList
                 )
               );
               slaveVm.pdeEventCount = frameCount;
