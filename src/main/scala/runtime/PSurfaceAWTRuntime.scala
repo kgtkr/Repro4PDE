@@ -140,14 +140,22 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
             RuntimeMain.events ++= RuntimeMain.addedEventsQueue.take();
           }
 
+          val delayThreshold = 12;
           val addSleepTime =
-            if (sketch.frameCount >= RuntimeMain.frameCountLimit) {
-              val diff = sketch.frameCount - RuntimeMain.frameCountLimit;
+            if (
+              sketch.frameCount - delayThreshold >= RuntimeMain.frameCountLimit
+            ) {
+              val diff =
+                (sketch.frameCount - delayThreshold - RuntimeMain.frameCountLimit).toLong;
               // 10フレームかけて均一化する計算
-              diff * 1000 / 60 / 10
+              diff * 1000 * 1000000L / 60 / 10
             } else {
               0
             }
+
+          /* if (addSleepTime > 0) {
+            println("addSleepTime: " + addSleepTime / 1000000.0 + "ms");
+          } */
 
           val afterTime = System.nanoTime();
           val timeDiff = afterTime - beforeTime;

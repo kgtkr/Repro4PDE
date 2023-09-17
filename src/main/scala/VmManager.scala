@@ -217,7 +217,7 @@ class VmManager(
     new Thread(() => {
       try {
         while (true) {
-          val eventSet = Option(vm.eventQueue().remove(100))
+          val eventSet = Option(vm.eventQueue().remove(100)) // 遅延の原因になる
             .map(_.asScala)
             .getOrElse(Seq.empty);
           for (evt <- eventSet) {

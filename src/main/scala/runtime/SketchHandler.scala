@@ -73,7 +73,7 @@ class SketchHandler(
       this.currentFrameEvents.clear();
     }
 
-    if (this.onTarget && this.applet.frameCount % 10 == 0) {
+    if (this.onTarget /*&& this.applet.frameCount % 10 == 0*/ ) {
       RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent
           .OnUpdateLocation(
