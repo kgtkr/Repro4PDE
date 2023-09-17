@@ -65,6 +65,7 @@ import java.net.StandardProtocolFamily
 import net.kgtkr.seekprog.ext._;
 import net.kgtkr.seekprog.tool.SeekprogTool
 import scala.concurrent.Promise
+import java.nio.channels.Channels
 
 object VmManager {
   enum Cmd {
@@ -180,27 +181,28 @@ class VmManager(
         });
         runtimeCmdThread.start();
 
-        val buf = ByteBuffer.allocate(1024);
-        val sBuf = new StringBuffer();
+        val bs = new BufferedReader(
+          new InputStreamReader(
+            Channels.newInputStream(sc),
+            StandardCharsets.UTF_8
+          )
+        );
 
-        while ({
-          try {
-            sc.read(buf) != -1
-          } catch {
-            case e: ClosedByInterruptException => {
-              runtimeCmdThread.interrupt();
-              false
+        for (
+          line <- Iterator
+            .continually {
+              try {
+                bs.readLine()
+              } catch {
+                case e: ClosedByInterruptException => {
+                  runtimeCmdThread.interrupt();
+                  null
+                }
+              }
             }
-          }
-        }) {
-          buf.flip();
-          sBuf.append(StandardCharsets.UTF_8.decode(buf));
-          if (sBuf.charAt(sBuf.length() - 1) == '\n') {
-            runtimeEventQueue.add(RuntimeEvent.fromJSON(sBuf.toString()));
-            sBuf.setLength(0);
-          }
-
-          buf.clear()
+            .takeWhile(_ != null)
+        ) {
+          runtimeEventQueue.add(RuntimeEvent.fromJSON(line));
         }
         ()
       });

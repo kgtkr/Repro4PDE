@@ -17,12 +17,15 @@ import java.util.concurrent.LinkedTransferQueue
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import processing.core.PConstants
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.nio.channels.Channels
 
 object RuntimeMain {
   var targetFrameCount = 0;
   // TODO: 絶対この変数スレッドセーフじゃない
   val events: Buffer[List[PdeEventWrapper]] = Buffer();
-  private var socketChannel: SocketChannel = null;
+  private var sc: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
   var paused = false;
   var notTriggerPausedEvent = false;
@@ -55,47 +58,48 @@ object RuntimeMain {
     this.events ++= decode[List[List[PdeEventWrapper]]](
       events
     ).right.get
-    this.socketChannel = {
+    this.sc = {
       val sockPath = Path.of(sketch.args(0));
       val sockAddr = UnixDomainSocketAddress.of(sockPath);
-      val socketChannel = SocketChannel.open(StandardProtocolFamily.UNIX);
-      socketChannel.connect(sockAddr);
-      socketChannel
+      val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
+      sc.connect(sockAddr);
+      sc
     };
     new Thread(() => {
       while (true) {
         val event = runtimeEventQueue.take();
-        socketChannel.write(event.toBytes())
+        sc.write(event.toBytes())
       }
     }).start();
     new Thread(() => {
-      while (true) {
-        val buf = ByteBuffer.allocate(1024);
-        val sBuf = new StringBuffer();
+      val bs = new BufferedReader(
+        new InputStreamReader(
+          Channels.newInputStream(sc),
+          StandardCharsets.UTF_8
+        )
+      );
 
-        while (socketChannel.read(buf) != -1) {
-          buf.flip();
-          sBuf.append(StandardCharsets.UTF_8.decode(buf));
-          if (sBuf.charAt(sBuf.length() - 1) == '\n') {
-            RuntimeCmd.fromJSON(sBuf.toString()) match {
-              case RuntimeCmd.Pause() => {
-                paused = true;
-              }
-              case RuntimeCmd.Resume() => {
-                paused = false;
-                resumeQueue.put(());
-              }
-              case RuntimeCmd.AddedEvents(events) => {
-                addedEventsQueue.put(events);
-              }
-              case RuntimeCmd.LimitFrameCount(frameCount) => {
-                frameCountLimit = frameCount;
-              }
-            }
-            sBuf.setLength(0);
+      for (
+        line <- Iterator
+          .continually {
+            bs.readLine()
           }
-
-          buf.clear()
+          .takeWhile(_ != null)
+      ) {
+        RuntimeCmd.fromJSON(line) match {
+          case RuntimeCmd.Pause() => {
+            paused = true;
+          }
+          case RuntimeCmd.Resume() => {
+            paused = false;
+            resumeQueue.put(());
+          }
+          case RuntimeCmd.AddedEvents(events) => {
+            addedEventsQueue.put(events);
+          }
+          case RuntimeCmd.LimitFrameCount(frameCount) => {
+            frameCountLimit = frameCount;
+          }
         }
       }
     }).start();
