@@ -88,12 +88,12 @@ object EditorManager {
     var frameCount = Int.MaxValue;
   }
 
-  class VmManagers(var master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
+  class VmManagers(val master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 
   enum Task {
     case TCmd(cmd: Cmd)
-    case TMasterEvent(event: VmManager.Event)
-    case TSlaveEvent(id: Int, event: VmManager.Event)
+    case TMasterEvent(vmManagers: VmManagers, event: VmManager.Event)
+    case TSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event)
   }
   export Task._
 
@@ -164,16 +164,16 @@ class EditorManager(val editor: JavaEditor) {
       defaultRunning = this.running,
       pdeEvents = this.pdeEvents.toList
     );
+    val vmms = new VmManagers(masterVmManager, slaveVms);
     masterVmManager.listen { event =>
       taskQueue.put(
         TMasterEvent(
+          vmms,
           event
         )
       )
     }
-    vmManagers = Some(
-      new VmManagers(masterVmManager, slaveVms)
-    );
+    vmManagers = Some(vmms);
 
     for {
       _ <- {
@@ -215,7 +215,7 @@ class EditorManager(val editor: JavaEditor) {
     slaveVm.vm.listen { event =>
       taskQueue.put(
         TSlaveEvent(
-          buildId,
+          slaveVm,
           event
         )
       )
@@ -227,16 +227,26 @@ class EditorManager(val editor: JavaEditor) {
   private def exitVm() = {
     assert(vmManagers.isDefined);
     val oldVmManagers = vmManagers.get;
-    val oldVmManager = oldVmManagers.master;
+    val vmManager = oldVmManagers.master;
 
     for {
-      _ <- {
-        val p = Promise[Unit]();
-        oldVmManager.send(VmManager.Cmd.Exit(p));
-        p.future
-      }
-      _ <- Future.traverse(oldVmManagers.slaves.toSeq) {
-        case (id, slaveVm) => {
+      _ <-
+        if (vmManager.isExited) {
+          Future {
+            vmManager.forceExit()
+          }
+        } else {
+          val p = Promise[Unit]();
+          vmManager.send(VmManager.Cmd.Exit(p));
+          p.future
+        }
+
+      _ <- Future.traverse(oldVmManagers.slaves.toSeq) { case (_, slaveVm) =>
+        if (slaveVm.vm.isExited) {
+          Future {
+            slaveVm.vm.forceExit()
+          }
+        } else {
           val p = Promise[Unit]();
           slaveVm.vm.send(VmManager.Cmd.Exit(p));
           p.future
@@ -253,10 +263,10 @@ class EditorManager(val editor: JavaEditor) {
       while (!isExit) {
         val task = taskQueue.take();
         task match {
-          case TCmd(cmd)           => processCmd(cmd)
-          case TMasterEvent(event) => processMasterEvent(event)
-          case TSlaveEvent(id, event) => {
-            processSlaveEvent(id, event)
+          case TCmd(cmd)                 => processCmd(cmd)
+          case TMasterEvent(vmms, event) => processMasterEvent(vmms, event)
+          case TSlaveEvent(slaveVm, event) => {
+            processSlaveEvent(slaveVm, event)
           }
 
         }
@@ -317,6 +327,16 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.StartSketch(done) => {
+        vmManagers match {
+          case Some(vmManagers) if vmManagers.master.isExited => {
+            Await.ready(
+              exitVm(),
+              Duration.Inf
+            )
+          }
+          case _ => {}
+        }
+
         vmManagers match {
           case Some(_) => {
             done.failure(new Exception("vm is already running"));
@@ -469,7 +489,7 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
-  private def processMasterEvent(event: VmManager.Event) = {
+  private def processMasterEvent(vmms: VmManagers, event: VmManager.Event) = {
     event match {
       case VmManager.Event
             .UpdateLocation(frameCount, trimMax, events) => {
@@ -492,24 +512,18 @@ class EditorManager(val editor: JavaEditor) {
         for ((event, i) <- events.zipWithIndex) {
           this.pdeEvents(frameCount - events.length + i) = event;
         }
-        vmManagers match {
-          case Some(vmManagers) =>
-            for ((_, slaveVm) <- vmManagers.slaves) {
-              slaveVm.vm.sendSlaveSync(
-                VmManager.SlaveSyncCmd.AddedEvents(
-                  pdeEvents
-                    .take(
-                      frameCount
-                    )
-                    .drop(slaveVm.pdeEventCount)
-                    .toList
+        for ((_, slaveVm) <- vmms.slaves) {
+          slaveVm.vm.sendSlaveSync(
+            VmManager.SlaveSyncCmd.AddedEvents(
+              pdeEvents
+                .take(
+                  frameCount
                 )
-              );
-              slaveVm.pdeEventCount = frameCount;
-            }
-          case None => {
-            println("vm is not running");
-          }
+                .drop(slaveVm.pdeEventCount)
+                .toList
+            )
+          );
+          slaveVm.pdeEventCount = frameCount;
         }
 
         this.eventListeners.foreach(
@@ -528,18 +542,11 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
-  private def processSlaveEvent(id: Int, event: VmManager.Event) = {
+  private def processSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event) = {
     event match {
       case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
-        vmManagers.flatMap(_.slaves.get(id)) match {
-          case Some(slaveVm) => {
-            slaveVm.frameCount = frameCount;
-            updateSlaveVms();
-          }
-          case None => {
-            println("slave is not found");
-          }
-        }
+        slaveVm.frameCount = frameCount;
+        updateSlaveVms();
       }
       case VmManager.Event.Stopped() => {}
     }

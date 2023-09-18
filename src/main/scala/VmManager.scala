@@ -101,6 +101,12 @@ object VmManager {
   }
   export Task._;
 
+  enum ExitType {
+    case Running;
+    case ExitCmd;
+    case Exception;
+  }
+
 }
 
 class VmManager(
@@ -117,9 +123,13 @@ class VmManager(
   var progressCmd: Option[Cmd] = None;
   var running = false;
   val taskQueue = new LinkedTransferQueue[Task]();
+  @volatile
+  var vmForForceExit: Option[VirtualMachine] = None;
+  @volatile
+  var exited = false;
 
   def start(done: Promise[Unit]) = {
-    var isExpectedExit = false;
+    var exitType = ExitType.Running;
 
     val sockPath = {
       val tempDir = Files.createTempDirectory("seekprog");
@@ -237,7 +247,7 @@ class VmManager(
 
     new Thread(() => {
       try {
-        while (true) {
+        while (exitType == ExitType.Running) {
           val task = taskQueue.take();
           task match {
             case TVmEvent(eventSet) => {
@@ -316,6 +326,7 @@ class VmManager(
                   }
                   case evt: ExceptionEvent => {
                     runner.exceptionEvent(evt);
+                    exitType = ExitType.Exception;
                   }
                   case _ => {}
                 }
@@ -350,10 +361,8 @@ class VmManager(
                     }
                   }
                   case Cmd.Exit(done) => {
-                    running = false;
                     vm.exit(0);
-                    threads.foreach(_.interrupt())
-                    isExpectedExit = true;
+                    exitType = ExitType.ExitCmd;
 
                     progressCmd = None;
                     done.success(());
@@ -428,29 +437,35 @@ class VmManager(
             }
           }
 
-          vm.resume();
+          if (exitType != ExitType.ExitCmd) {
+            vm.resume();
+          }
         }
       } catch {
-        case e: VMDisconnectedException => {
-          threads.foreach(_.interrupt())
-          println("VM is now disconnected.");
-        }
         case e: Exception => {
           e.printStackTrace();
         }
       }
 
-      if (!isExpectedExit) {
-        progressCmd.foreach(
-          _.done.failure(new Exception("unexpected vm exit"))
-        );
-        progressCmd = None;
-        this.eventListeners.foreach(
-          _(
-            Event.Stopped()
+      threads.foreach(_.interrupt())
+      progressCmd.foreach(
+        _.done.failure(new Exception("unexpected vm exit"))
+      );
+      progressCmd = None;
+      running = false;
+
+      exitType match {
+        case ExitType.Running | ExitType.Exception => {
+          vmForForceExit = Some(vm);
+          this.eventListeners.foreach(
+            _(
+              Event.Stopped()
+            )
           )
-        )
+        }
+        case _ => {}
       }
+      exited = true;
     }).start();
   }
 
@@ -459,10 +474,21 @@ class VmManager(
   }
 
   def send(cmd: Cmd) = {
+    assert(!exited);
     taskQueue.add(TCmd(cmd));
   }
 
   def sendSlaveSync(cmd: SlaveSyncCmd) = {
+    assert(!exited);
     taskQueue.add(TSlaveSyncCmd(cmd));
   }
+
+  // Stoppedイベントが発生した後のみ使用可能
+  // 例外発生などで異常な状態だが動いているvmを強制終了する
+  def forceExit() = {
+    assert(exited);
+    vmForForceExit.foreach(_.exit(0));
+  }
+
+  def isExited = exited
 }
