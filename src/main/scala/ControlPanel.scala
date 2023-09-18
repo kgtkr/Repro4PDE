@@ -57,7 +57,7 @@ object ControlPanel {
     val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
     val loading = BooleanProperty(false);
     val editorManager = new EditorManager(editor)
-    editorManager.run()
+    editorManager.start()
     val playerState = ObjectProperty(PlayerState.Stopped);
     val currentBuildIdProperty = ObjectProperty[Option[Int]](None);
     val slaveBuildIdProperty = ObjectProperty[Option[Int]](None);

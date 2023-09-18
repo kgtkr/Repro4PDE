@@ -118,7 +118,7 @@ class VmManager(
   var running = false;
   val taskQueue = new LinkedTransferQueue[Task]();
 
-  def run(done: Promise[Unit]) = {
+  def start(done: Promise[Unit]) = {
     var isExpectedExit = false;
 
     val sockPath = {

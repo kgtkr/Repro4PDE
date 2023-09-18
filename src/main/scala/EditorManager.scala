@@ -172,7 +172,7 @@ class EditorManager(val editor: JavaEditor) {
           pdeEvents = this.pdeEvents.toList
         );
         blocking {
-          newVmManager.run(p)
+          newVmManager.start(p)
         }
         newVmManager.listen { event =>
           taskQueue.put(
@@ -210,7 +210,7 @@ class EditorManager(val editor: JavaEditor) {
           this.frameCount
         );
         blocking {
-          newVmManager.vm.run(p)
+          newVmManager.vm.start(p)
         }
         newVmManager.vm.listen { event =>
           taskQueue.put(
@@ -249,7 +249,7 @@ class EditorManager(val editor: JavaEditor) {
     } yield ()
   }
 
-  def run() = {
+  def start() = {
     new Thread(() => {
       while (!isExit) {
         val task = taskQueue.take();
