@@ -143,7 +143,7 @@ class EditorManager(val editor: JavaEditor) {
       .minOption
       .getOrElse(Int.MaxValue);
 
-    oldVmManager.slaveSyncCmdQueue.put(
+    oldVmManager.sendSlaveSync(
       VmManager.SlaveSyncCmd.LimitFrameCount(minFrameCount)
     )
   }
@@ -478,7 +478,7 @@ class EditorManager(val editor: JavaEditor) {
         vmManagers match {
           case Some(vmManagers) =>
             for ((_, slaveVm) <- vmManagers.slaves) {
-              slaveVm.vm.slaveSyncCmdQueue.put(
+              slaveVm.vm.sendSlaveSync(
                 VmManager.SlaveSyncCmd.AddedEvents(
                   pdeEvents
                     .take(

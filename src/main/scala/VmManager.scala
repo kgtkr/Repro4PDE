@@ -22,7 +22,6 @@ import com.sun.jdi.connect.Connector;
 import com.sun.jdi.connect.LaunchingConnector;
 import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ClassPrepareEvent;
-import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.ExceptionEvent;
 import com.sun.jdi.event.MethodEntryEvent;
@@ -93,23 +92,28 @@ object VmManager {
     case Stopped();
   }
 
-  private type Task = EventSet | VmManager.Cmd | VmManager.SlaveSyncCmd |
-    RuntimeEvent
-
+  enum Task {
+    case TVmEvent(eventSet: EventSet);
+    case TCmd(cmd: Cmd);
+    case TSlaveSyncCmd(cmd: SlaveSyncCmd);
+    case TRuntimeEvent(event: RuntimeEvent);
+  }
+  export Task._;
 }
 
 class VmManager(
     val editorManager: EditorManager,
     val slaveBuildId: Option[Int] = None
 ) {
-  val slaveSyncCmdQueue = new LinkedTransferQueue[VmManager.SlaveSyncCmd]();
-  var eventListeners = List[VmManager.Event => Unit]();
-  var progressCmd: Option[VmManager.Cmd] = None;
+  import VmManager._;
+
+  var eventListeners = List[Event => Unit]();
+  var progressCmd: Option[Cmd] = None;
   var running = false;
   val build = slaveBuildId
     .map(editorManager.builds(_))
     .getOrElse(editorManager.currentBuild);
-  val taskQueue = new LinkedTransferQueue[VmManager.Task]();
+  val taskQueue = new LinkedTransferQueue[Task]();
 
   def run(done: Promise[Unit]) = {
     var isExpectedExit = false;
@@ -211,7 +215,7 @@ class VmManager(
               }
               .takeWhile(_ != null)
           ) {
-            taskQueue.add(RuntimeEvent.fromJSON(line));
+            taskQueue.add(TRuntimeEvent(RuntimeEvent.fromJSON(line)));
           }
           ()
         });
@@ -223,31 +227,20 @@ class VmManager(
       val eventQueue = vm.eventQueue();
       val thread = new Thread(() => {
         while (true) {
-          taskQueue.add(eventQueue.remove());
+          taskQueue.add(TVmEvent(eventQueue.remove()));
         }
       });
       thread.start();
       threads += thread;
     };
-    {
-      val thread = new Thread(() => {
-        while (true) {
-          taskQueue.add(
-            slaveSyncCmdQueue.take()
-          );
-        }
-      });
-      thread.start();
-      threads += thread;
-    };
-    this.progressCmd = Some(VmManager.Cmd.StartSketch(done));
+    this.progressCmd = Some(Cmd.StartSketch(done));
 
     new Thread(() => {
       try {
         while (true) {
-          val vmTask = taskQueue.take();
-          vmTask match {
-            case eventSet: EventSet => {
+          val task = taskQueue.take();
+          task match {
+            case TVmEvent(eventSet) => {
               for (evt <- eventSet.asScala) {
                 println(evt);
                 evt match {
@@ -328,16 +321,16 @@ class VmManager(
                 }
               }
             }
-            case cmd: VmManager.Cmd => {
+            case TCmd(cmd) => {
               if (progressCmd.isEmpty) {
                 progressCmd = Some(cmd);
 
                 cmd match {
-                  case VmManager.Cmd.StartSketch(done) => {
+                  case Cmd.StartSketch(done) => {
                     progressCmd = None;
                     done.failure(new Exception("already started"));
                   }
-                  case VmManager.Cmd.PauseSketch(done) => {
+                  case Cmd.PauseSketch(done) => {
                     if (!running) {
                       progressCmd = None;
                       done.failure(new Exception("already paused"));
@@ -347,7 +340,7 @@ class VmManager(
                     }
 
                   }
-                  case VmManager.Cmd.ResumeSketch(done) => {
+                  case Cmd.ResumeSketch(done) => {
                     if (running) {
                       progressCmd = None;
                       done.failure(new Exception("already running"));
@@ -356,7 +349,7 @@ class VmManager(
                       running = true;
                     }
                   }
-                  case VmManager.Cmd.Exit(done) => {
+                  case Cmd.Exit(done) => {
                     running = false;
                     vm.exit(0);
                     threads.foreach(_.interrupt())
@@ -370,25 +363,25 @@ class VmManager(
                 cmd.done.failure(new Exception("already progress"));
               }
             }
-            case cmd: VmManager.SlaveSyncCmd => {
+            case TSlaveSyncCmd(cmd) => {
               cmd match {
-                case VmManager.SlaveSyncCmd.AddedEvents(events) => {
+                case SlaveSyncCmd.AddedEvents(events) => {
                   runtimeCmdQueue.add(
                     RuntimeCmd.AddedEvents(events)
                   );
                 }
-                case VmManager.SlaveSyncCmd.LimitFrameCount(frameCount) => {
+                case SlaveSyncCmd.LimitFrameCount(frameCount) => {
                   runtimeCmdQueue.add(
                     RuntimeCmd.LimitFrameCount(frameCount)
                   );
                 }
               }
             }
-            case event: RuntimeEvent => {
+            case TRuntimeEvent(event) => {
               event match {
                 case RuntimeEvent.OnTargetFrameCount => {
                   progressCmd match {
-                    case Some(VmManager.Cmd.StartSketch(done)) => {
+                    case Some(Cmd.StartSketch(done)) => {
                       progressCmd = None;
                       done.success(());
                     }
@@ -401,7 +394,7 @@ class VmManager(
                       .OnUpdateLocation(frameCount, trimMax, events) => {
                   eventListeners.foreach(
                     _(
-                      VmManager.Event.UpdateLocation(
+                      Event.UpdateLocation(
                         frameCount,
                         trimMax,
                         events
@@ -411,7 +404,7 @@ class VmManager(
                 }
                 case RuntimeEvent.OnPaused => {
                   progressCmd match {
-                    case Some(cmd: VmManager.Cmd.PauseSketch) => {
+                    case Some(cmd: Cmd.PauseSketch) => {
                       progressCmd = None;
                       cmd.done.success(());
                     }
@@ -422,7 +415,7 @@ class VmManager(
                 }
                 case RuntimeEvent.OnResumed => {
                   progressCmd match {
-                    case Some(cmd: VmManager.Cmd.ResumeSketch) => {
+                    case Some(cmd: Cmd.ResumeSketch) => {
                       progressCmd = None;
                       cmd.done.success(());
                     }
@@ -454,18 +447,22 @@ class VmManager(
         progressCmd = None;
         this.eventListeners.foreach(
           _(
-            VmManager.Event.Stopped()
+            Event.Stopped()
           )
         )
       }
     }).start();
   }
 
-  def listen(listener: VmManager.Event => Unit) = {
+  def listen(listener: Event => Unit) = {
     eventListeners = listener :: eventListeners;
   }
 
-  def send(cmd: VmManager.Cmd) = {
-    taskQueue.add(cmd);
+  def send(cmd: Cmd) = {
+    taskQueue.add(TCmd(cmd));
+  }
+
+  def sendSlaveSync(cmd: SlaveSyncCmd) = {
+    taskQueue.add(TSlaveSyncCmd(cmd));
   }
 }
