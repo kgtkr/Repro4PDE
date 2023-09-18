@@ -84,15 +84,15 @@ object EditorManager {
     case CreatedBuild(build: Build);
   }
 
-  class SlaveVm(val vm: VmManager, var pdeEventCount: Int) {
+  class SlaveVm(val vmManager: VmManager, var pdeEventCount: Int) {
     var frameCount = Int.MaxValue;
   }
 
-  class VmManagers(val master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
+  class MasterVm(val vmManager: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 
   enum Task {
     case TCmd(cmd: Cmd)
-    case TMasterEvent(vmManagers: VmManagers, event: VmManager.Event)
+    case TMasterEvent(masterVm: MasterVm, event: VmManager.Event)
     case TSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event)
   }
   export Task._
@@ -111,7 +111,7 @@ class EditorManager(val editor: JavaEditor) {
   var running = false;
   var currentBuild: Build = null;
   val builds = Buffer[Build]();
-  var vmManagers: Option[VmManagers] = None;
+  var oMasterVm: Option[MasterVm] = None;
   val slaves = MSet[Int]();
   var isExit = false;
 
@@ -136,21 +136,22 @@ class EditorManager(val editor: JavaEditor) {
   }
 
   private def updateSlaveVms() = {
-    assert(vmManagers.isDefined);
-    val oldVmManagers = vmManagers.get;
-    val oldVmManager = oldVmManagers.master;
-    val minFrameCount = oldVmManagers.slaves.values
+    assert(oMasterVm.isDefined);
+    val masterVm = oMasterVm.get;
+    val vmManager = masterVm.vmManager;
+    val minFrameCount = masterVm.slaves.values
+      .filter(!_.vmManager.isExited)
       .map(_.frameCount)
       .minOption
       .getOrElse(Int.MaxValue);
 
-    oldVmManager.sendSlaveSync(
+    vmManager.sendSlaveSync(
       VmManager.SlaveSyncCmd.LimitFrameCount(minFrameCount)
     )
   }
 
   private def startVm() = {
-    assert(vmManagers.isEmpty);
+    assert(oMasterVm.isEmpty);
     editor.statusEmpty();
 
     val slaveVms = MMap[Int, SlaveVm](
@@ -164,7 +165,7 @@ class EditorManager(val editor: JavaEditor) {
       defaultRunning = this.running,
       pdeEvents = this.pdeEvents.toList
     );
-    val vmms = new VmManagers(masterVmManager, slaveVms);
+    val vmms = new MasterVm(masterVmManager, slaveVms);
     masterVmManager.listen { event =>
       taskQueue.put(
         TMasterEvent(
@@ -173,7 +174,7 @@ class EditorManager(val editor: JavaEditor) {
         )
       )
     }
-    vmManagers = Some(vmms);
+    oMasterVm = Some(vmms);
 
     for {
       _ <- {
@@ -188,7 +189,7 @@ class EditorManager(val editor: JavaEditor) {
         case slaveVm => {
           val p = Promise[Unit]();
           blocking {
-            slaveVm.vm.start(p)
+            slaveVm.vmManager.start(p)
           }
           p.future
         }
@@ -212,7 +213,7 @@ class EditorManager(val editor: JavaEditor) {
       this.frameCount
     );
 
-    slaveVm.vm.listen { event =>
+    slaveVm.vmManager.listen { event =>
       taskQueue.put(
         TSlaveEvent(
           slaveVm,
@@ -225,9 +226,9 @@ class EditorManager(val editor: JavaEditor) {
   }
 
   private def exitVm() = {
-    assert(vmManagers.isDefined);
-    val oldVmManagers = vmManagers.get;
-    val vmManager = oldVmManagers.master;
+    assert(oMasterVm.isDefined);
+    val masterVm = oMasterVm.get;
+    val vmManager = masterVm.vmManager;
 
     for {
       _ <-
@@ -241,19 +242,19 @@ class EditorManager(val editor: JavaEditor) {
           p.future
         }
 
-      _ <- Future.traverse(oldVmManagers.slaves.toSeq) { case (_, slaveVm) =>
-        if (slaveVm.vm.isExited) {
+      _ <- Future.traverse(masterVm.slaves.toSeq) { case (_, slaveVm) =>
+        if (slaveVm.vmManager.isExited) {
           Future {
-            slaveVm.vm.forceExit()
+            slaveVm.vmManager.forceExit()
           }
         } else {
           val p = Promise[Unit]();
-          slaveVm.vm.send(VmManager.Cmd.Exit(p));
+          slaveVm.vmManager.send(VmManager.Cmd.Exit(p));
           p.future
         }
       }
       _ <- Future {
-        vmManagers = None;
+        oMasterVm = None;
       }
     } yield ()
   }
@@ -280,7 +281,7 @@ class EditorManager(val editor: JavaEditor) {
   private def processCmd(cmd: Cmd) = {
     cmd match {
       case Cmd.ReloadSketch(done) => {
-        vmManagers match {
+        oMasterVm match {
           case Some(_) => {
             try {
               this.updateBuild();
@@ -306,7 +307,7 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.UpdateLocation(frameCount, done) => {
-        vmManagers match {
+        oMasterVm match {
           case Some(_) => {
             Await.ready(
               done
@@ -327,8 +328,8 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.StartSketch(done) => {
-        vmManagers match {
-          case Some(vmManagers) if vmManagers.master.isExited => {
+        oMasterVm match {
+          case Some(masterVm) if masterVm.vmManager.isExited => {
             Await.ready(
               exitVm(),
               Duration.Inf
@@ -337,7 +338,7 @@ class EditorManager(val editor: JavaEditor) {
           case _ => {}
         }
 
-        vmManagers match {
+        oMasterVm match {
           case Some(_) => {
             done.failure(new Exception("vm is already running"));
           }
@@ -360,11 +361,11 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.PauseSketch(done) => {
-        vmManagers match {
-          case Some(vmManagers) => {
+        oMasterVm match {
+          case Some(masterVm) => {
             Await.ready(
               {
-                vmManagers.master.send(
+                masterVm.vmManager.send(
                   VmManager.Cmd.PauseSketch(done)
                 )
                 done.future
@@ -379,11 +380,11 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.ResumeSketch(done) => {
-        vmManagers match {
-          case Some(vmManagers) => {
+        oMasterVm match {
+          case Some(masterVm) => {
             Await.ready(
               {
-                vmManagers.master.send(
+                masterVm.vmManager.send(
                   VmManager.Cmd.ResumeSketch(done)
                 )
                 done.future
@@ -398,7 +399,7 @@ class EditorManager(val editor: JavaEditor) {
         }
       }
       case Cmd.Exit(done) => {
-        vmManagers match {
+        oMasterVm match {
           case Some(_) => {
             Await.ready(
               done
@@ -421,17 +422,17 @@ class EditorManager(val editor: JavaEditor) {
           done.failure(new Exception("slave is already added"));
         } else {
           slaves += id;
-          vmManagers match {
-            case Some(vmManagers) => {
+          oMasterVm match {
+            case Some(masterVm) => {
               val slaveVm = createSlaveVm(currentBuild.id);
-              vmManagers.slaves += (id -> slaveVm);
+              masterVm.slaves += (id -> slaveVm);
 
               Await.ready(
                 done
                   .completeWith({
                     val p = Promise[Unit]();
                     blocking {
-                      slaveVm.vm.start(p)
+                      slaveVm.vmManager.start(p)
                     }
                     p.future
                   })
@@ -453,26 +454,26 @@ class EditorManager(val editor: JavaEditor) {
           done.failure(new Exception("slave is not added"));
         } else {
           slaves -= id;
-          vmManagers match {
-            case Some(vmManagers) => {
+          oMasterVm match {
+            case Some(masterVm) => {
               Await.ready(
                 done
                   .completeWith(for {
                     _ <- Future {
-                      assert(vmManagers.slaves.contains(id));
+                      assert(masterVm.slaves.contains(id));
                     }
                     _ <- {
                       val done = Promise[Unit]();
-                      vmManagers
+                      masterVm
                         .slaves(id)
-                        .vm
+                        .vmManager
                         .send(
                           VmManager.Cmd.Exit(done)
                         );
                       done.future
                     }
                     _ <- Future {
-                      vmManagers.slaves -= id;
+                      masterVm.slaves -= id;
                       updateSlaveVms();
                     }
                   } yield ())
@@ -489,7 +490,7 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
-  private def processMasterEvent(vmms: VmManagers, event: VmManager.Event) = {
+  private def processMasterEvent(vmms: MasterVm, event: VmManager.Event) = {
     event match {
       case VmManager.Event
             .UpdateLocation(frameCount, trimMax, events) => {
@@ -513,7 +514,7 @@ class EditorManager(val editor: JavaEditor) {
           this.pdeEvents(frameCount - events.length + i) = event;
         }
         for ((_, slaveVm) <- vmms.slaves) {
-          slaveVm.vm.sendSlaveSync(
+          slaveVm.vmManager.sendSlaveSync(
             VmManager.SlaveSyncCmd.AddedEvents(
               pdeEvents
                 .take(
