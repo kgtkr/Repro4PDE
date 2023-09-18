@@ -284,28 +284,21 @@ object ControlPanel {
                           slaveBuildIdProperty.value match {
                             case Some(slaveBuildId) => {
                               loading.value = true
+                              slaveBuildIdProperty.value = None
                               editorManager.send(
                                 EditorManager.Cmd.RemoveSlave(
                                   slaveBuildId,
-                                  donePromise {
-                                    Platform.runLater {
-                                      slaveBuildIdProperty.value = None
-                                    }
-                                  }
+                                  donePromise()
                                 )
                               )
                             }
                             case None => {
                               loading.value = true
+                              slaveBuildIdProperty.value = Some(currentBuildId)
                               editorManager.send(
                                 EditorManager.Cmd.AddSlave(
                                   currentBuildId,
-                                  donePromise {
-                                    Platform.runLater {
-                                      slaveBuildIdProperty.value =
-                                        Some(currentBuildId)
-                                    }
-                                  }
+                                  donePromise()
                                 )
                               )
                             }

@@ -176,24 +176,26 @@ class EditorManager(val editor: JavaEditor) {
     }
     oMasterVm = Some(vmms);
 
-    for {
-      _ <- {
+    val f1 = {
+      val p = Promise[Unit]();
+      blocking {
+        masterVmManager.start(p)
+      }
+      p.future
+    };
+    // 失敗しても無視したい
+    val f2 = Future.traverse(slaveVms.values.toSeq) {
+      case slaveVm => {
         val p = Promise[Unit]();
         blocking {
-          masterVmManager.start(p)
+          slaveVm.vmManager.start(p)
         }
         p.future
       }
-      // TODO: 失敗しても実行を続けたい
-      _ <- Future.traverse(slaveVms.values.toSeq) {
-        case slaveVm => {
-          val p = Promise[Unit]();
-          blocking {
-            slaveVm.vmManager.start(p)
-          }
-          p.future
-        }
-      }
+    };
+    for {
+      _ <- f1
+      _ <- f2
       _ <- Future {
         updateSlaveVms();
       }
@@ -225,6 +227,18 @@ class EditorManager(val editor: JavaEditor) {
     slaveVm
   }
 
+  private def exitSlaveVm(slaveVm: SlaveVm) = {
+    if (slaveVm.vmManager.isExited) {
+      Future {
+        slaveVm.vmManager.forceExit()
+      }
+    } else {
+      val p = Promise[Unit]();
+      slaveVm.vmManager.send(VmManager.Cmd.Exit(p));
+      p.future
+    }
+  }
+
   private def exitVm() = {
     assert(oMasterVm.isDefined);
     val masterVm = oMasterVm.get;
@@ -243,15 +257,7 @@ class EditorManager(val editor: JavaEditor) {
         }
 
       _ <- Future.traverse(masterVm.slaves.toSeq) { case (_, slaveVm) =>
-        if (slaveVm.vmManager.isExited) {
-          Future {
-            slaveVm.vmManager.forceExit()
-          }
-        } else {
-          val p = Promise[Unit]();
-          slaveVm.vmManager.send(VmManager.Cmd.Exit(p));
-          p.future
-        }
+        exitSlaveVm(slaveVm);
       }
       _ <- Future {
         oMasterVm = None;
@@ -462,16 +468,7 @@ class EditorManager(val editor: JavaEditor) {
                     _ <- Future {
                       assert(masterVm.slaves.contains(id));
                     }
-                    _ <- {
-                      val done = Promise[Unit]();
-                      masterVm
-                        .slaves(id)
-                        .vmManager
-                        .send(
-                          VmManager.Cmd.Exit(done)
-                        );
-                      done.future
-                    }
+                    _ <- exitSlaveVm(masterVm.slaves(id))
                     _ <- Future {
                       masterVm.slaves -= id;
                       updateSlaveVms();

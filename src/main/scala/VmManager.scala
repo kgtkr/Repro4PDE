@@ -479,7 +479,9 @@ class VmManager(
   }
 
   def sendSlaveSync(cmd: SlaveSyncCmd) = {
-    assert(!exited);
+    if (exited) {
+      println("sendSlaveSync warning: vm is exited");
+    }
     taskQueue.add(TSlaveSyncCmd(cmd));
   }
 
