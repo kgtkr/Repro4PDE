@@ -79,7 +79,9 @@ class SketchHandler(
           .OnUpdateLocation(
             this.applet.frameCount,
             this.stopReproductionEvent,
-            this.eventsBuf.toList
+            this.eventsBuf.toList,
+            this.applet.windowX,
+            this.applet.windowY
           )
       )
       this.eventsBuf.clear();

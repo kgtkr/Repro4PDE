@@ -84,7 +84,11 @@ object EditorManager {
     case CreatedBuild(build: Build);
   }
 
-  class SlaveVm(val vmManager: VmManager, var pdeEventCount: Int) {
+  class SlaveVm(
+      val vmManager: VmManager,
+      val buildId: Int,
+      var pdeEventCount: Int
+  ) {
     var frameCount = Int.MaxValue;
   }
 
@@ -114,6 +118,8 @@ class EditorManager(val editor: JavaEditor) {
   var oMasterVm: Option[MasterVm] = None;
   val slaves = MSet[Int]();
   var isExit = false;
+  var masterLocation: Option[java.awt.Point] = None;
+  val slaveLocations: MMap[Int, java.awt.Point] = MMap();
 
   private def updateBuild() = {
     try {
@@ -150,6 +156,18 @@ class EditorManager(val editor: JavaEditor) {
     )
   }
 
+  private def temporaryLocationWith(
+      location: Option[java.awt.Point]
+  )(f: => Unit) = {
+    val oldLocation = editor.getSketchLocation();
+    try {
+      location.foreach(editor.setSketchLocation(_));
+      f;
+    } finally {
+      location.foreach(_ => editor.setSketchLocation(oldLocation));
+    }
+  }
+
   private def startVm() = {
     assert(oMasterVm.isEmpty);
     editor.statusEmpty();
@@ -179,7 +197,9 @@ class EditorManager(val editor: JavaEditor) {
     val f1 = {
       val p = Promise[Unit]();
       blocking {
-        masterVmManager.start(p)
+        temporaryLocationWith(masterLocation) {
+          masterVmManager.start(p)
+        }
       }
       p.future
     };
@@ -188,7 +208,11 @@ class EditorManager(val editor: JavaEditor) {
       case slaveVm => {
         val p = Promise[Unit]();
         blocking {
-          slaveVm.vmManager.start(p)
+          temporaryLocationWith(
+            slaveLocations.get(slaveVm.buildId)
+          ) {
+            slaveVm.vmManager.start(p)
+          }
         }
         p.future
       }
@@ -212,6 +236,7 @@ class EditorManager(val editor: JavaEditor) {
         defaultRunning = true,
         pdeEvents = this.pdeEvents.toList
       ),
+      buildId,
       this.frameCount
     );
 
@@ -490,7 +515,7 @@ class EditorManager(val editor: JavaEditor) {
   private def processMasterEvent(vmms: MasterVm, event: VmManager.Event) = {
     event match {
       case VmManager.Event
-            .UpdateLocation(frameCount, trimMax, events) => {
+            .UpdateLocation(frameCount, trimMax, events, windowX, windowY) => {
         this.frameCount = frameCount;
         this.maxFrameCount = if (trimMax) {
           frameCount
@@ -532,6 +557,8 @@ class EditorManager(val editor: JavaEditor) {
             )
           )
         )
+
+        this.masterLocation = Some(new java.awt.Point(windowX, windowY));
       }
       case VmManager.Event.Stopped() => {
         this.running = false;
@@ -542,9 +569,17 @@ class EditorManager(val editor: JavaEditor) {
 
   private def processSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event) = {
     event match {
-      case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
+      case VmManager.Event.UpdateLocation(
+            frameCount,
+            trimMax,
+            events,
+            windowX,
+            windowY
+          ) => {
         slaveVm.frameCount = frameCount;
         updateSlaveVms();
+        this.slaveLocations(slaveVm.buildId) =
+          new java.awt.Point(windowX, windowY);
       }
       case VmManager.Event.Stopped() => {}
     }

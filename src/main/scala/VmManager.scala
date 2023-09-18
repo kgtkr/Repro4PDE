@@ -88,7 +88,9 @@ object VmManager {
     case UpdateLocation(
         frameCount: Int,
         trimMax: Boolean,
-        events: List[List[PdeEventWrapper]]
+        events: List[List[PdeEventWrapper]],
+        windowX: Int,
+        windowY: Int
     );
     case Stopped();
   }
@@ -400,13 +402,21 @@ class VmManager(
                   }
                 }
                 case RuntimeEvent
-                      .OnUpdateLocation(frameCount, trimMax, events) => {
+                      .OnUpdateLocation(
+                        frameCount,
+                        trimMax,
+                        events,
+                        windowX,
+                        windowY
+                      ) => {
                   eventListeners.foreach(
                     _(
                       Event.UpdateLocation(
                         frameCount,
                         trimMax,
-                        events
+                        events,
+                        windowX,
+                        windowY
                       )
                     )
                   )
