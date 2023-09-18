@@ -66,6 +66,7 @@ import net.kgtkr.seekprog.tool.SeekprogTool
 import scala.concurrent.Promise
 import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
+import processing.app.RunnerListener
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -99,20 +100,22 @@ object VmManager {
     case TRuntimeEvent(event: RuntimeEvent);
   }
   export Task._;
+
 }
 
 class VmManager(
-    val editorManager: EditorManager,
-    val slaveBuildId: Option[Int] = None
+    val javaBuild: JavaBuild,
+    val slaveMode: Boolean,
+    val runnerListener: RunnerListener,
+    val targetFrameCount: Int,
+    val defaultRunning: Boolean,
+    val pdeEvents: List[List[PdeEventWrapper]]
 ) {
   import VmManager._;
 
   var eventListeners = List[Event => Unit]();
   var progressCmd: Option[Cmd] = None;
   var running = false;
-  val build = slaveBuildId
-    .map(editorManager.builds(_))
-    .getOrElse(editorManager.currentBuild);
   val taskQueue = new LinkedTransferQueue[Task]();
 
   def run(done: Promise[Unit]) = {
@@ -136,10 +139,9 @@ class VmManager(
       ),
       "tool"
     );
-    running = editorManager.running;
-    val javaBuild = build.javaBuild;
+    running = defaultRunning;
     val runner =
-      new Runner(javaBuild, new RunnerListenerEdtAdapter(editorManager.editor));
+      new Runner(javaBuild, runnerListener);
 
     val cp = toolDir
       .listFiles()
@@ -167,8 +169,6 @@ class VmManager(
     exceptionRequest.enable();
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
-    val frameCount = editorManager.frameCount;
-    val pdeEvents = editorManager.pdeEvents;
     val threads = Buffer[Thread]();
     {
       val thread =
@@ -294,14 +294,14 @@ class VmManager(
                             .get(0),
                           Arrays.asList(
                             instance,
-                            vm.mirrorOf(frameCount),
+                            vm.mirrorOf(targetFrameCount),
                             vm.mirrorOf(
-                              (if (slaveBuildId.isDefined)
-                                 pdeEvents.toList.take(frameCount)
+                              (if (slaveMode)
+                                 pdeEvents.toList.take(targetFrameCount)
                                else pdeEvents.toList).asJson.noSpaces
                             ),
                             vm.mirrorOf(!running),
-                            vm.mirrorOf(slaveBuildId.isDefined)
+                            vm.mirrorOf(slaveMode)
                           ),
                           0
                         );

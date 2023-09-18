@@ -59,6 +59,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.collection.mutable.Map as MMap
 import scala.collection.mutable.Set as MSet
+import processing.app.RunnerListenerEdtAdapter
 
 object EditorManager {
   enum Cmd {
@@ -162,7 +163,14 @@ class EditorManager(val editor: JavaEditor) {
         .map(MMap(_: _*))
       newVmManager <- {
         val p = Promise[Unit]();
-        val newVmManager = new VmManager(this);
+        val newVmManager = new VmManager(
+          javaBuild = currentBuild.javaBuild,
+          slaveMode = false,
+          runnerListener = new RunnerListenerEdtAdapter(editor),
+          targetFrameCount = this.frameCount,
+          defaultRunning = this.running,
+          pdeEvents = this.pdeEvents.toList
+        );
         blocking {
           newVmManager.run(p)
         }
@@ -191,7 +199,14 @@ class EditorManager(val editor: JavaEditor) {
       newVmManager <- {
         val p = Promise[Unit]();
         val newVmManager = new SlaveVm(
-          new VmManager(this, Some(buildId)),
+          new VmManager(
+            javaBuild = builds(buildId).javaBuild,
+            slaveMode = true,
+            runnerListener = new RunnerListenerEdtAdapter(editor),
+            targetFrameCount = this.frameCount,
+            defaultRunning = true,
+            pdeEvents = this.pdeEvents.toList
+          ),
           this.frameCount
         );
         blocking {
