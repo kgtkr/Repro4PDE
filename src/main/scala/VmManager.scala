@@ -93,7 +93,7 @@ object VmManager {
     case Stopped();
   }
 
-  private type VmTask = EventSet | VmManager.Cmd | VmManager.SlaveSyncCmd |
+  private type Task = EventSet | VmManager.Cmd | VmManager.SlaveSyncCmd |
     RuntimeEvent
 
 }
@@ -102,7 +102,6 @@ class VmManager(
     val editorManager: EditorManager,
     val slaveBuildId: Option[Int] = None
 ) {
-  val cmdQueue = new LinkedTransferQueue[VmManager.Cmd]();
   val slaveSyncCmdQueue = new LinkedTransferQueue[VmManager.SlaveSyncCmd]();
   var eventListeners = List[VmManager.Event => Unit]();
   var progressCmd: Option[VmManager.Cmd] = None;
@@ -110,6 +109,7 @@ class VmManager(
   val build = slaveBuildId
     .map(editorManager.builds(_))
     .getOrElse(editorManager.currentBuild);
+  val taskQueue = new LinkedTransferQueue[VmManager.Task]();
 
   def run(done: Promise[Unit]) = {
     var isExpectedExit = false;
@@ -163,7 +163,6 @@ class VmManager(
     exceptionRequest.enable();
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
-    val vmTaskQueue = new LinkedTransferQueue[VmManager.VmTask]();
     val frameCount = editorManager.frameCount;
     val pdeEvents = editorManager.pdeEvents;
     val threads = Buffer[Thread]();
@@ -212,7 +211,7 @@ class VmManager(
               }
               .takeWhile(_ != null)
           ) {
-            vmTaskQueue.add(RuntimeEvent.fromJSON(line));
+            taskQueue.add(RuntimeEvent.fromJSON(line));
           }
           ()
         });
@@ -224,7 +223,7 @@ class VmManager(
       val eventQueue = vm.eventQueue();
       val thread = new Thread(() => {
         while (true) {
-          vmTaskQueue.add(eventQueue.remove());
+          taskQueue.add(eventQueue.remove());
         }
       });
       thread.start();
@@ -233,16 +232,7 @@ class VmManager(
     {
       val thread = new Thread(() => {
         while (true) {
-          vmTaskQueue.add(cmdQueue.take());
-        }
-      });
-      thread.start();
-      threads += thread;
-    };
-    {
-      val thread = new Thread(() => {
-        while (true) {
-          vmTaskQueue.add(
+          taskQueue.add(
             slaveSyncCmdQueue.take()
           );
         }
@@ -255,7 +245,7 @@ class VmManager(
     new Thread(() => {
       try {
         while (true) {
-          val vmTask = vmTaskQueue.take();
+          val vmTask = taskQueue.take();
           vmTask match {
             case eventSet: EventSet => {
               for (evt <- eventSet.asScala) {
@@ -473,5 +463,9 @@ class VmManager(
 
   def listen(listener: VmManager.Event => Unit) = {
     eventListeners = listener :: eventListeners;
+  }
+
+  def send(cmd: VmManager.Cmd) = {
+    taskQueue.add(cmd);
   }
 }

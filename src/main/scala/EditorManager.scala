@@ -89,10 +89,20 @@ object EditorManager {
   }
 
   class VmManagers(var master: VmManager, val slaves: MMap[Int, SlaveVm]) {}
+
+  enum Task {
+    case TCmd(cmd: Cmd)
+    case TMasterEvent(event: VmManager.Event)
+    case TSlaveEvent(id: Int, event: VmManager.Event)
+  }
+  export Task._
+
 }
 
 class EditorManager(val editor: JavaEditor) {
-  val cmdQueue = new LinkedTransferQueue[EditorManager.Cmd]();
+  import EditorManager._
+
+  val taskQueue = new LinkedTransferQueue[Task]();
   var eventListeners = List[EditorManager.Event => Unit]();
 
   var frameCount = 0;
@@ -103,6 +113,7 @@ class EditorManager(val editor: JavaEditor) {
   val builds = Buffer[Build]();
   var vmManagers: Option[EditorManager.VmManagers] = None;
   val slaves = MSet[Int]();
+  var isExit = false;
 
   private def updateBuild() = {
     try {
@@ -156,54 +167,13 @@ class EditorManager(val editor: JavaEditor) {
         blocking {
           newVmManager.run(p)
         }
-        newVmManager.listen {
-          // TODO: スレッドセーフじゃない
-          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
-            this.frameCount = frameCount;
-            this.maxFrameCount = if (trimMax) {
-              frameCount
-            } else {
-              Math.max(this.maxFrameCount, frameCount);
-            };
-
-            if (this.maxFrameCount < this.pdeEvents.length) {
-              this.pdeEvents.trimEnd(
-                this.pdeEvents.length - this.maxFrameCount
-              );
-            } else if (this.maxFrameCount > this.pdeEvents.length) {
-              this.pdeEvents ++= Seq.fill(
-                this.maxFrameCount - this.pdeEvents.length
-              )(List());
-            }
-            for ((event, i) <- events.zipWithIndex) {
-              this.pdeEvents(frameCount - events.length + i) = event;
-            }
-            for ((_, slaveVm) <- slaveVms) {
-              slaveVm.vm.slaveSyncCmdQueue.put(
-                VmManager.SlaveSyncCmd.AddedEvents(
-                  pdeEvents
-                    .take(
-                      frameCount
-                    )
-                    .drop(slaveVm.pdeEventCount)
-                    .toList
-                )
-              );
-              slaveVm.pdeEventCount = frameCount;
-            }
-            this.eventListeners.foreach(
-              _(
-                EditorManager.Event.UpdateLocation(
-                  frameCount,
-                  this.maxFrameCount
-                )
-              )
+        newVmManager.listen { event =>
+          taskQueue.put(
+            TMasterEvent(
+              event
             )
-          }
-          case VmManager.Event.Stopped() => {
-            this.running = false;
-            this.eventListeners.foreach(_(EditorManager.Event.Stopped()))
-          }
+          )
+
         }
         p.future.map(_ => newVmManager)
       }
@@ -228,12 +198,13 @@ class EditorManager(val editor: JavaEditor) {
         blocking {
           newVmManager.vm.run(p)
         }
-        newVmManager.vm.listen {
-          case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
-            newVmManager.frameCount = frameCount;
-            updateSlaveVms();
-          }
-          case VmManager.Event.Stopped() => {}
+        newVmManager.vm.listen { event =>
+          taskQueue.put(
+            TSlaveEvent(
+              buildId,
+              event
+            )
+          )
         }
         p.future.map(_ => newVmManager)
       }
@@ -248,13 +219,13 @@ class EditorManager(val editor: JavaEditor) {
     for {
       _ <- {
         val p = Promise[Unit]();
-        oldVmManager.cmdQueue.put(VmManager.Cmd.Exit(p));
+        oldVmManager.send(VmManager.Cmd.Exit(p));
         p.future
       }
       _ <- Future.traverse(oldVmManagers.slaves.toSeq) {
         case (id, slaveVm) => {
           val p = Promise[Unit]();
-          slaveVm.vm.cmdQueue.put(VmManager.Cmd.Exit(p));
+          slaveVm.vm.send(VmManager.Cmd.Exit(p));
           p.future
         }
       }
@@ -266,210 +237,300 @@ class EditorManager(val editor: JavaEditor) {
 
   def run() = {
     new Thread(() => {
-      var isExit = false;
       while (!isExit) {
-        val cmd = cmdQueue.take();
-        cmd match {
-          case EditorManager.Cmd.ReloadSketch(done) => {
-            vmManagers match {
-              case Some(_) => {
-                try {
-                  this.updateBuild();
-                  Await.ready(
-                    done
-                      .completeWith(for {
-                        _ <- exitVm()
-                        _ <- startVm()
-                      } yield ())
-                      .future,
-                    Duration.Inf
-                  )
-                } catch {
-                  case e: Exception => {
-                    done.failure(e);
+        val task = taskQueue.take();
+        task match {
+          case TCmd(cmd)           => processCmd(cmd)
+          case TMasterEvent(event) => processMasterEvent(event)
+          case TSlaveEvent(id, event) => {
+            processSlaveEvent(id, event)
+          }
+
+        }
+
+      }
+
+      ()
+    }).start();
+  }
+
+  private def processCmd(cmd: EditorManager.Cmd) = {
+    cmd match {
+      case EditorManager.Cmd.ReloadSketch(done) => {
+        vmManagers match {
+          case Some(_) => {
+            try {
+              this.updateBuild();
+              Await.ready(
+                done
+                  .completeWith(for {
+                    _ <- exitVm()
+                    _ <- startVm()
+                  } yield ())
+                  .future,
+                Duration.Inf
+              )
+            } catch {
+              case e: Exception => {
+                done.failure(e);
+              }
+            }
+
+          }
+          case None => {
+            done.failure(new Exception("vm is not running"));
+          }
+        }
+      }
+      case EditorManager.Cmd.UpdateLocation(frameCount, done) => {
+        vmManagers match {
+          case Some(_) => {
+            Await.ready(
+              done
+                .completeWith(for {
+                  _ <- exitVm()
+                  _ <- Future {
+                    this.frameCount = frameCount;
                   }
-                }
-
-              }
-              case None => {
-                done.failure(new Exception("vm is not running"));
-              }
-            }
+                  _ <- startVm()
+                } yield ())
+                .future,
+              Duration.Inf
+            )
           }
-          case EditorManager.Cmd.UpdateLocation(frameCount, done) => {
-            vmManagers match {
-              case Some(_) => {
-                Await.ready(
-                  done
-                    .completeWith(for {
-                      _ <- exitVm()
-                      _ <- Future {
-                        this.frameCount = frameCount;
-                      }
-                      _ <- startVm()
-                    } yield ())
-                    .future,
-                  Duration.Inf
-                )
-              }
-              case None => {
-                done.failure(new Exception("vm is not running"));
-              }
-            }
+          case None => {
+            done.failure(new Exception("vm is not running"));
           }
-          case EditorManager.Cmd.StartSketch(done) => {
-            vmManagers match {
-              case Some(_) => {
-                done.failure(new Exception("vm is already running"));
-              }
-              case None => {
-                try {
-                  running = true;
-                  this.updateBuild();
-                  Await.ready(
-                    done
-                      .completeWith(startVm())
-                      .future,
-                    Duration.Inf
-                  )
-                } catch {
-                  case e: Exception => {
-                    done.failure(e);
-                  }
-                }
-              }
-            }
+        }
+      }
+      case EditorManager.Cmd.StartSketch(done) => {
+        vmManagers match {
+          case Some(_) => {
+            done.failure(new Exception("vm is already running"));
           }
-          case EditorManager.Cmd.PauseSketch(done) => {
-            vmManagers match {
-              case Some(vmManagers) => {
-                Await.ready(
-                  {
-                    vmManagers.master.cmdQueue.put(
-                      VmManager.Cmd.PauseSketch(done)
-                    )
-                    done.future
-                  },
-                  Duration.Inf
-                )
-                this.running = false;
-              }
-              case None => {
-                done.failure(new Exception("vm is not running"));
-              }
-            }
-          }
-          case EditorManager.Cmd.ResumeSketch(done) => {
-            vmManagers match {
-              case Some(vmManagers) => {
-                Await.ready(
-                  {
-                    vmManagers.master.cmdQueue.put(
-                      VmManager.Cmd.ResumeSketch(done)
-                    )
-                    done.future
-                  },
-                  Duration.Inf
-                )
-                this.running = false;
-              }
-              case None => {
-                done.failure(new Exception("vm is not running"));
-              }
-            }
-          }
-          case EditorManager.Cmd.Exit(done) => {
-            vmManagers match {
-              case Some(_) => {
-                Await.ready(
-                  done
-                    .completeWith(exitVm())
-                    .future,
-                  Duration.Inf
-                )
-                running = false;
-              }
-              case None => {
-                running = false;
-                done.success(());
-              }
-            }
-
-            isExit = true;
-          }
-          case EditorManager.Cmd.AddSlave(id, done) => {
-            if (slaves.contains(id)) {
-              done.failure(new Exception("slave is already added"));
-            } else {
-              slaves += id;
-              vmManagers match {
-                case Some(vmManagers) => {
-                  Await.ready(
-                    done
-                      .completeWith(for {
-                        vm <- startSlaveVm(id)
-                        _ <- Future {
-                          assert(!vmManagers.slaves.contains(id));
-                          vmManagers.slaves += (id -> vm);
-                        }
-                      } yield ())
-                      .future,
-                    Duration.Inf
-                  )
-
-                  updateSlaveVms();
-                }
-                case None => {
-                  done.success(());
-                }
-              }
-            }
-
-          }
-          case EditorManager.Cmd.RemoveSlave(id, done) => {
-            if (!slaves.contains(id)) {
-              done.failure(new Exception("slave is not added"));
-            } else {
-              slaves -= id;
-              vmManagers match {
-                case Some(vmManagers) => {
-                  Await.ready(
-                    done
-                      .completeWith(for {
-                        _ <- Future {
-                          assert(vmManagers.slaves.contains(id));
-                        }
-                        _ <- {
-                          val done = Promise[Unit]();
-                          vmManagers
-                            .slaves(id)
-                            .vm
-                            .cmdQueue
-                            .put(
-                              VmManager.Cmd.Exit(done)
-                            );
-                          done.future
-                        }
-                        _ <- Future {
-                          vmManagers.slaves -= id;
-                          updateSlaveVms();
-                        }
-                      } yield ())
-                      .future,
-                    Duration.Inf
-                  )
-                }
-                case None => {
-                  done.success(());
-                }
+          case None => {
+            try {
+              running = true;
+              this.updateBuild();
+              Await.ready(
+                done
+                  .completeWith(startVm())
+                  .future,
+                Duration.Inf
+              )
+            } catch {
+              case e: Exception => {
+                done.failure(e);
               }
             }
           }
         }
       }
+      case EditorManager.Cmd.PauseSketch(done) => {
+        vmManagers match {
+          case Some(vmManagers) => {
+            Await.ready(
+              {
+                vmManagers.master.send(
+                  VmManager.Cmd.PauseSketch(done)
+                )
+                done.future
+              },
+              Duration.Inf
+            )
+            this.running = false;
+          }
+          case None => {
+            done.failure(new Exception("vm is not running"));
+          }
+        }
+      }
+      case EditorManager.Cmd.ResumeSketch(done) => {
+        vmManagers match {
+          case Some(vmManagers) => {
+            Await.ready(
+              {
+                vmManagers.master.send(
+                  VmManager.Cmd.ResumeSketch(done)
+                )
+                done.future
+              },
+              Duration.Inf
+            )
+            this.running = false;
+          }
+          case None => {
+            done.failure(new Exception("vm is not running"));
+          }
+        }
+      }
+      case EditorManager.Cmd.Exit(done) => {
+        vmManagers match {
+          case Some(_) => {
+            Await.ready(
+              done
+                .completeWith(exitVm())
+                .future,
+              Duration.Inf
+            )
+            running = false;
+          }
+          case None => {
+            running = false;
+            done.success(());
+          }
+        }
 
-      ()
-    }).start();
+        isExit = true;
+      }
+      case EditorManager.Cmd.AddSlave(id, done) => {
+        if (slaves.contains(id)) {
+          done.failure(new Exception("slave is already added"));
+        } else {
+          slaves += id;
+          vmManagers match {
+            case Some(vmManagers) => {
+              Await.ready(
+                done
+                  .completeWith(for {
+                    vm <- startSlaveVm(id)
+                    _ <- Future {
+                      assert(!vmManagers.slaves.contains(id));
+                      vmManagers.slaves += (id -> vm);
+                    }
+                  } yield ())
+                  .future,
+                Duration.Inf
+              )
+
+              updateSlaveVms();
+            }
+            case None => {
+              done.success(());
+            }
+          }
+        }
+
+      }
+      case EditorManager.Cmd.RemoveSlave(id, done) => {
+        if (!slaves.contains(id)) {
+          done.failure(new Exception("slave is not added"));
+        } else {
+          slaves -= id;
+          vmManagers match {
+            case Some(vmManagers) => {
+              Await.ready(
+                done
+                  .completeWith(for {
+                    _ <- Future {
+                      assert(vmManagers.slaves.contains(id));
+                    }
+                    _ <- {
+                      val done = Promise[Unit]();
+                      vmManagers
+                        .slaves(id)
+                        .vm
+                        .send(
+                          VmManager.Cmd.Exit(done)
+                        );
+                      done.future
+                    }
+                    _ <- Future {
+                      vmManagers.slaves -= id;
+                      updateSlaveVms();
+                    }
+                  } yield ())
+                  .future,
+                Duration.Inf
+              )
+            }
+            case None => {
+              done.success(());
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private def processMasterEvent(event: VmManager.Event) = {
+    event match {
+      case VmManager.Event
+            .UpdateLocation(frameCount, trimMax, events) => {
+        this.frameCount = frameCount;
+        this.maxFrameCount = if (trimMax) {
+          frameCount
+        } else {
+          Math.max(this.maxFrameCount, frameCount);
+        };
+
+        if (this.maxFrameCount < this.pdeEvents.length) {
+          this.pdeEvents.trimEnd(
+            this.pdeEvents.length - this.maxFrameCount
+          );
+        } else if (this.maxFrameCount > this.pdeEvents.length) {
+          this.pdeEvents ++= Seq.fill(
+            this.maxFrameCount - this.pdeEvents.length
+          )(List());
+        }
+        for ((event, i) <- events.zipWithIndex) {
+          this.pdeEvents(frameCount - events.length + i) = event;
+        }
+        vmManagers match {
+          case Some(vmManagers) =>
+            for ((_, slaveVm) <- vmManagers.slaves) {
+              slaveVm.vm.slaveSyncCmdQueue.put(
+                VmManager.SlaveSyncCmd.AddedEvents(
+                  pdeEvents
+                    .take(
+                      frameCount
+                    )
+                    .drop(slaveVm.pdeEventCount)
+                    .toList
+                )
+              );
+              slaveVm.pdeEventCount = frameCount;
+            }
+          case None => {
+            println("vm is not running");
+          }
+        }
+
+        this.eventListeners.foreach(
+          _(
+            EditorManager.Event.UpdateLocation(
+              frameCount,
+              this.maxFrameCount
+            )
+          )
+        )
+      }
+      case VmManager.Event.Stopped() => {
+        this.running = false;
+        this.eventListeners.foreach(_(EditorManager.Event.Stopped()))
+      }
+    }
+  }
+
+  private def processSlaveEvent(id: Int, event: VmManager.Event) = {
+    event match {
+      case VmManager.Event.UpdateLocation(frameCount, trimMax, events) => {
+        vmManagers.flatMap(_.slaves.get(id)) match {
+          case Some(slaveVm) => {
+            slaveVm.frameCount = frameCount;
+            updateSlaveVms();
+          }
+          case None => {
+            println("slave is not found");
+          }
+        }
+      }
+      case VmManager.Event.Stopped() => {}
+    }
+  }
+
+  def send(cmd: Cmd) = {
+    taskQueue.put(TCmd(cmd));
   }
 
   def listen(listener: EditorManager.Event => Unit) = {

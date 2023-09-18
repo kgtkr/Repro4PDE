@@ -117,7 +117,7 @@ object ControlPanel {
                   Platform.runLater {
                     if (!loading.value) {
                       loading.value = true
-                      editorManager.cmdQueue.add(
+                      editorManager.send(
                         EditorManager.Cmd.ReloadSketch(donePromise())
                       )
                     }
@@ -148,7 +148,7 @@ object ControlPanel {
         override def windowClosing(e: java.awt.event.WindowEvent) = {
           Platform.runLater {
             loading.value = true
-            editorManager.cmdQueue.add(
+            editorManager.send(
               EditorManager.Cmd.Exit(donePromise())
             );
             frame.dispose()
@@ -170,7 +170,7 @@ object ControlPanel {
                   valueChanging.addListener({ (_, oldChanging, changing) =>
                     if (oldChanging && !changing && !loading.value) {
                       loading.value = true
-                      editorManager.cmdQueue.add(
+                      editorManager.send(
                         EditorManager.Cmd.UpdateLocation(
                           (value.value * 60).toInt,
                           donePromise()
@@ -230,7 +230,7 @@ object ControlPanel {
                       playerState.value match {
                         case PlayerState.Playing => {
                           loading.value = true
-                          editorManager.cmdQueue.add(
+                          editorManager.send(
                             EditorManager.Cmd.PauseSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Paused;
@@ -240,7 +240,7 @@ object ControlPanel {
                         }
                         case PlayerState.Paused => {
                           loading.value = true
-                          editorManager.cmdQueue.add(
+                          editorManager.send(
                             EditorManager.Cmd.ResumeSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Playing;
@@ -250,7 +250,7 @@ object ControlPanel {
                         }
                         case PlayerState.Stopped => {
                           loading.value = true
-                          editorManager.cmdQueue.add(
+                          editorManager.send(
                             EditorManager.Cmd.StartSketch(donePromise {
                               Platform.runLater {
                                 playerState.value = PlayerState.Playing;
@@ -284,7 +284,7 @@ object ControlPanel {
                           slaveBuildIdProperty.value match {
                             case Some(slaveBuildId) => {
                               loading.value = true
-                              editorManager.cmdQueue.add(
+                              editorManager.send(
                                 EditorManager.Cmd.RemoveSlave(
                                   slaveBuildId,
                                   donePromise {
@@ -297,7 +297,7 @@ object ControlPanel {
                             }
                             case None => {
                               loading.value = true
-                              editorManager.cmdQueue.add(
+                              editorManager.send(
                                 EditorManager.Cmd.AddSlave(
                                   currentBuildId,
                                   donePromise {
