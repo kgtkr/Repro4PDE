@@ -66,6 +66,7 @@ import net.kgtkr.seekprog.ext._;
 import net.kgtkr.seekprog.tool.SeekprogTool
 import scala.concurrent.Promise
 import java.nio.channels.Channels
+import scala.collection.mutable.Buffer
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -91,6 +92,9 @@ object VmManager {
     );
     case Stopped();
   }
+
+  private type VmTask = EventSet | VmManager.Cmd | VmManager.SlaveSyncCmd |
+    RuntimeEvent
 
 }
 
@@ -159,265 +163,282 @@ class VmManager(
     exceptionRequest.enable();
 
     val runtimeCmdQueue = new LinkedTransferQueue[RuntimeCmd]();
-    val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
+    val vmTaskQueue = new LinkedTransferQueue[VmManager.VmTask]();
     val frameCount = editorManager.frameCount;
     val pdeEvents = editorManager.pdeEvents;
+    val threads = Buffer[Thread]();
+    {
+      val thread =
+        new Thread(() => {
+          val sc = ssc.accept();
 
-    val runtimeEventThread =
-      new Thread(() => {
-        val sc = ssc.accept();
+          val runtimeCmdThread = new Thread(() => {
+            for (
+              cmd <- Iterator
+                .continually({
+                  try {
+                    Some(runtimeCmdQueue.take())
+                  } catch {
+                    case e: InterruptedException => {
+                      None
+                    }
+                  }
+                })
+                .mapWhile(identity)
+            ) {
+              sc.write(cmd.toBytes());
+            }
+          });
+          runtimeCmdThread.start();
 
-        val runtimeCmdThread = new Thread(() => {
+          val bs = new BufferedReader(
+            new InputStreamReader(
+              Channels.newInputStream(sc),
+              StandardCharsets.UTF_8
+            )
+          );
+
           for (
-            cmd <- Iterator
-              .continually({
+            line <- Iterator
+              .continually {
                 try {
-                  Some(runtimeCmdQueue.take())
+                  bs.readLine()
                 } catch {
-                  case e: InterruptedException => {
-                    None
+                  case e: ClosedByInterruptException => {
+                    runtimeCmdThread.interrupt();
+                    null
                   }
                 }
-              })
-              .mapWhile(identity)
-          ) {
-            sc.write(cmd.toBytes());
-          }
-        });
-        runtimeCmdThread.start();
-
-        val bs = new BufferedReader(
-          new InputStreamReader(
-            Channels.newInputStream(sc),
-            StandardCharsets.UTF_8
-          )
-        );
-
-        for (
-          line <- Iterator
-            .continually {
-              try {
-                bs.readLine()
-              } catch {
-                case e: ClosedByInterruptException => {
-                  runtimeCmdThread.interrupt();
-                  null
-                }
               }
-            }
-            .takeWhile(_ != null)
-        ) {
-          runtimeEventQueue.add(RuntimeEvent.fromJSON(line));
+              .takeWhile(_ != null)
+          ) {
+            vmTaskQueue.add(RuntimeEvent.fromJSON(line));
+          }
+          ()
+        });
+      thread.start();
+      threads += thread;
+    };
+
+    {
+      val eventQueue = vm.eventQueue();
+      val thread = new Thread(() => {
+        while (true) {
+          vmTaskQueue.add(eventQueue.remove());
         }
-        ()
       });
-    runtimeEventThread.start();
+      thread.start();
+      threads += thread;
+    };
+    {
+      val thread = new Thread(() => {
+        while (true) {
+          vmTaskQueue.add(cmdQueue.take());
+        }
+      });
+      thread.start();
+      threads += thread;
+    };
+    {
+      val thread = new Thread(() => {
+        while (true) {
+          vmTaskQueue.add(
+            slaveSyncCmdQueue.take()
+          );
+        }
+      });
+      thread.start();
+      threads += thread;
+    };
     this.progressCmd = Some(VmManager.Cmd.StartSketch(done));
 
     new Thread(() => {
       try {
         while (true) {
-          val eventSet = Option(vm.eventQueue().remove(100)) // 遅延の原因になる
-            .map(_.asScala)
-            .getOrElse(Seq.empty);
-          for (evt <- eventSet) {
-            println(evt);
-            evt match {
-              case evt: ClassPrepareEvent => {
-                val classType = evt.referenceType().asInstanceOf[ClassType];
-                if (classType.name() == javaBuild.getSketchClassName()) {
-                  vm.eventRequestManager()
-                    .createBreakpointRequest(
-                      classType.methodsByName("settings").get(0).location()
-                    )
-                    .enable();
-                }
-              }
-              case evt: BreakpointEvent => {
-                val frame = evt.thread().frame(0);
-                val instance = frame.thisObject();
-
-                evt.location().method().name() match {
-                  case "settings" => {
-                    val ClassClassType = vm
-                      .classesByName("java.lang.Class")
-                      .get(0)
-                      .asInstanceOf[ClassType];
-                    ClassClassType.invokeMethod(
-                      evt.thread(),
-                      ClassClassType
-                        .methodsByName(
-                          "forName",
-                          "(Ljava/lang/String;)Ljava/lang/Class;"
+          val vmTask = vmTaskQueue.take();
+          vmTask match {
+            case eventSet: EventSet => {
+              for (evt <- eventSet.asScala) {
+                println(evt);
+                evt match {
+                  case evt: ClassPrepareEvent => {
+                    val classType = evt.referenceType().asInstanceOf[ClassType];
+                    if (classType.name() == javaBuild.getSketchClassName()) {
+                      vm.eventRequestManager()
+                        .createBreakpointRequest(
+                          classType.methodsByName("settings").get(0).location()
                         )
-                        .get(0),
-                      Arrays.asList(
-                        vm.mirrorOf(
-                          classOf[runtime.RuntimeMain].getName()
-                        )
-                      ),
-                      0
-                    );
-
-                    val RuntimeMainClassType = vm
-                      .classesByName(
-                        classOf[runtime.RuntimeMain].getName()
-                      )
-                      .get(0)
-                      .asInstanceOf[ClassType];
-
-                    RuntimeMainClassType.invokeMethod(
-                      evt.thread(),
-                      RuntimeMainClassType
-                        .methodsByName("init")
-                        .get(0),
-                      Arrays.asList(
-                        instance,
-                        vm.mirrorOf(frameCount),
-                        vm.mirrorOf(
-                          (if (slaveBuildId.isDefined)
-                             pdeEvents.toList.take(frameCount)
-                           else pdeEvents.toList).asJson.noSpaces
-                        ),
-                        vm.mirrorOf(!running),
-                        vm.mirrorOf(slaveBuildId.isDefined)
-                      ),
-                      0
-                    );
-                    evt.request().disable();
+                        .enable();
+                    }
                   }
-                  case _ =>
-                    throw new RuntimeException(
-                      "Unreachable"
-                    )
+                  case evt: BreakpointEvent => {
+                    val frame = evt.thread().frame(0);
+                    val instance = frame.thisObject();
+
+                    evt.location().method().name() match {
+                      case "settings" => {
+                        val ClassClassType = vm
+                          .classesByName("java.lang.Class")
+                          .get(0)
+                          .asInstanceOf[ClassType];
+                        ClassClassType.invokeMethod(
+                          evt.thread(),
+                          ClassClassType
+                            .methodsByName(
+                              "forName",
+                              "(Ljava/lang/String;)Ljava/lang/Class;"
+                            )
+                            .get(0),
+                          Arrays.asList(
+                            vm.mirrorOf(
+                              classOf[runtime.RuntimeMain].getName()
+                            )
+                          ),
+                          0
+                        );
+
+                        val RuntimeMainClassType = vm
+                          .classesByName(
+                            classOf[runtime.RuntimeMain].getName()
+                          )
+                          .get(0)
+                          .asInstanceOf[ClassType];
+
+                        RuntimeMainClassType.invokeMethod(
+                          evt.thread(),
+                          RuntimeMainClassType
+                            .methodsByName("init")
+                            .get(0),
+                          Arrays.asList(
+                            instance,
+                            vm.mirrorOf(frameCount),
+                            vm.mirrorOf(
+                              (if (slaveBuildId.isDefined)
+                                 pdeEvents.toList.take(frameCount)
+                               else pdeEvents.toList).asJson.noSpaces
+                            ),
+                            vm.mirrorOf(!running),
+                            vm.mirrorOf(slaveBuildId.isDefined)
+                          ),
+                          0
+                        );
+                        evt.request().disable();
+                      }
+                      case _ =>
+                        throw new RuntimeException(
+                          "Unreachable"
+                        )
+                    }
+
+                  }
+                  case evt: ExceptionEvent => {
+                    runner.exceptionEvent(evt);
+                  }
+                  case _ => {}
                 }
-
-              }
-              case evt: ExceptionEvent => {
-                runner.exceptionEvent(evt);
-              }
-              case _ => {}
-            }
-          }
-
-          for (
-            cmd <- Iterator
-              .continually {
-                if (progressCmd.isEmpty) {
-                  Option(cmdQueue.poll())
-                } else {
-                  None
-                }
-              }
-              .mapWhile(identity)
-          ) {
-            progressCmd = Some(cmd);
-
-            cmd match {
-              case VmManager.Cmd.StartSketch(done) => {
-                progressCmd = None;
-                done.failure(new Exception("already started"));
-              }
-              case VmManager.Cmd.PauseSketch(done) => {
-                if (!running) {
-                  progressCmd = None;
-                  done.failure(new Exception("already paused"));
-                } else {
-                  runtimeCmdQueue.add(RuntimeCmd.Pause());
-                  running = false;
-                }
-
-              }
-              case VmManager.Cmd.ResumeSketch(done) => {
-                if (running) {
-                  progressCmd = None;
-                  done.failure(new Exception("already running"));
-                } else {
-                  runtimeCmdQueue.add(RuntimeCmd.Resume());
-                  running = true;
-                }
-              }
-              case VmManager.Cmd.Exit(done) => {
-                running = false;
-                vm.exit(0);
-                runtimeEventThread.interrupt();
-                isExpectedExit = true;
-
-                progressCmd = None;
-                done.success(());
-              }
-            }
-          }
-
-          for (
-            cmd <- Iterator
-              .continually {
-                slaveSyncCmdQueue.poll()
-              }
-              .takeWhile(_ != null)
-          ) {
-            cmd match {
-              case VmManager.SlaveSyncCmd.AddedEvents(events) => {
-                runtimeCmdQueue.add(
-                  RuntimeCmd.AddedEvents(events)
-                );
-              }
-              case VmManager.SlaveSyncCmd.LimitFrameCount(frameCount) => {
-                runtimeCmdQueue.add(
-                  RuntimeCmd.LimitFrameCount(frameCount)
-                );
               }
             }
-          }
+            case cmd: VmManager.Cmd => {
+              if (progressCmd.isEmpty) {
+                progressCmd = Some(cmd);
 
-          for (
-            event <- Iterator
-              .continually(Option(runtimeEventQueue.poll()))
-              .mapWhile(identity)
-          ) {
-            event match {
-              case RuntimeEvent.OnTargetFrameCount => {
-                progressCmd match {
-                  case Some(VmManager.Cmd.StartSketch(done)) => {
+                cmd match {
+                  case VmManager.Cmd.StartSketch(done) => {
+                    progressCmd = None;
+                    done.failure(new Exception("already started"));
+                  }
+                  case VmManager.Cmd.PauseSketch(done) => {
+                    if (!running) {
+                      progressCmd = None;
+                      done.failure(new Exception("already paused"));
+                    } else {
+                      runtimeCmdQueue.add(RuntimeCmd.Pause());
+                      running = false;
+                    }
+
+                  }
+                  case VmManager.Cmd.ResumeSketch(done) => {
+                    if (running) {
+                      progressCmd = None;
+                      done.failure(new Exception("already running"));
+                    } else {
+                      runtimeCmdQueue.add(RuntimeCmd.Resume());
+                      running = true;
+                    }
+                  }
+                  case VmManager.Cmd.Exit(done) => {
+                    running = false;
+                    vm.exit(0);
+                    threads.foreach(_.interrupt())
+                    isExpectedExit = true;
+
                     progressCmd = None;
                     done.success(());
                   }
-                  case progressCmd => {
-                    println("Unexpected event: OnTargetFrameCount");
-                  }
+                }
+              } else {
+                cmd.done.failure(new Exception("already progress"));
+              }
+            }
+            case cmd: VmManager.SlaveSyncCmd => {
+              cmd match {
+                case VmManager.SlaveSyncCmd.AddedEvents(events) => {
+                  runtimeCmdQueue.add(
+                    RuntimeCmd.AddedEvents(events)
+                  );
+                }
+                case VmManager.SlaveSyncCmd.LimitFrameCount(frameCount) => {
+                  runtimeCmdQueue.add(
+                    RuntimeCmd.LimitFrameCount(frameCount)
+                  );
                 }
               }
-              case RuntimeEvent
-                    .OnUpdateLocation(frameCount, trimMax, events) => {
-                eventListeners.foreach(
-                  _(
-                    VmManager.Event.UpdateLocation(
-                      frameCount,
-                      trimMax,
-                      events
+            }
+            case event: RuntimeEvent => {
+              event match {
+                case RuntimeEvent.OnTargetFrameCount => {
+                  progressCmd match {
+                    case Some(VmManager.Cmd.StartSketch(done)) => {
+                      progressCmd = None;
+                      done.success(());
+                    }
+                    case progressCmd => {
+                      println("Unexpected event: OnTargetFrameCount");
+                    }
+                  }
+                }
+                case RuntimeEvent
+                      .OnUpdateLocation(frameCount, trimMax, events) => {
+                  eventListeners.foreach(
+                    _(
+                      VmManager.Event.UpdateLocation(
+                        frameCount,
+                        trimMax,
+                        events
+                      )
                     )
                   )
-                )
-              }
-              case RuntimeEvent.OnPaused => {
-                progressCmd match {
-                  case Some(cmd: VmManager.Cmd.PauseSketch) => {
-                    progressCmd = None;
-                    cmd.done.success(());
-                  }
-                  case progressCmd => {
-                    println("Unexpected event: OnPaused");
+                }
+                case RuntimeEvent.OnPaused => {
+                  progressCmd match {
+                    case Some(cmd: VmManager.Cmd.PauseSketch) => {
+                      progressCmd = None;
+                      cmd.done.success(());
+                    }
+                    case progressCmd => {
+                      println("Unexpected event: OnPaused");
+                    }
                   }
                 }
-              }
-              case RuntimeEvent.OnResumed => {
-                progressCmd match {
-                  case Some(cmd: VmManager.Cmd.ResumeSketch) => {
-                    progressCmd = None;
-                    cmd.done.success(());
-                  }
-                  case progressCmd => {
-                    println("Unexpected event: OnResumed");
+                case RuntimeEvent.OnResumed => {
+                  progressCmd match {
+                    case Some(cmd: VmManager.Cmd.ResumeSketch) => {
+                      progressCmd = None;
+                      cmd.done.success(());
+                    }
+                    case progressCmd => {
+                      println("Unexpected event: OnResumed");
+                    }
                   }
                 }
               }
@@ -428,7 +449,7 @@ class VmManager(
         }
       } catch {
         case e: VMDisconnectedException => {
-          runtimeEventThread.interrupt();
+          threads.foreach(_.interrupt())
           println("VM is now disconnected.");
         }
         case e: Exception => {
