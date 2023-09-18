@@ -153,76 +153,75 @@ class EditorManager(val editor: JavaEditor) {
     assert(vmManagers.isEmpty);
     editor.statusEmpty();
 
-    for {
-      slaveVms <- Future
-        .traverse(slaves.toSeq) { id =>
-          startSlaveVm(id).map(
-            (id -> _)
-          )
-        }
-        .map(MMap(_: _*))
-      newVmManager <- {
-        val p = Promise[Unit]();
-        val newVmManager = new VmManager(
-          javaBuild = currentBuild.javaBuild,
-          slaveMode = false,
-          runnerListener = new RunnerListenerEdtAdapter(editor),
-          targetFrameCount = this.frameCount,
-          defaultRunning = this.running,
-          pdeEvents = this.pdeEvents.toList
-        );
-        blocking {
-          newVmManager.start(p)
-        }
-        newVmManager.listen { event =>
-          taskQueue.put(
-            TMasterEvent(
-              event
-            )
-          )
+    val slaveVms = MMap[Int, SlaveVm](
+      slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
+    );
+    val masterVmManager = new VmManager(
+      javaBuild = currentBuild.javaBuild,
+      slaveMode = false,
+      runnerListener = new RunnerListenerEdtAdapter(editor),
+      targetFrameCount = this.frameCount,
+      defaultRunning = this.running,
+      pdeEvents = this.pdeEvents.toList
+    );
+    masterVmManager.listen { event =>
+      taskQueue.put(
+        TMasterEvent(
+          event
+        )
+      )
+    }
+    vmManagers = Some(
+      new VmManagers(masterVmManager, slaveVms)
+    );
 
+    for {
+      _ <- {
+        val p = Promise[Unit]();
+        blocking {
+          masterVmManager.start(p)
         }
-        p.future.map(_ => newVmManager)
+        p.future
+      }
+      // TODO: 失敗しても実行を続けたい
+      _ <- Future.traverse(slaveVms.values.toSeq) {
+        case slaveVm => {
+          val p = Promise[Unit]();
+          blocking {
+            slaveVm.vm.start(p)
+          }
+          p.future
+        }
       }
       _ <- Future {
-        vmManagers = Some(
-          new VmManagers(newVmManager, slaveVms)
-        )
         updateSlaveVms();
       }
     } yield ()
   }
 
-  private def startSlaveVm(buildId: Int) = {
-    // 起動しなくても実行は続けたいのでエラーをうまく無視するべき
-    for {
-      newVmManager <- {
-        val p = Promise[Unit]();
-        val newVmManager = new SlaveVm(
-          new VmManager(
-            javaBuild = builds(buildId).javaBuild,
-            slaveMode = true,
-            runnerListener = new RunnerListenerEdtAdapter(editor),
-            targetFrameCount = this.frameCount,
-            defaultRunning = true,
-            pdeEvents = this.pdeEvents.toList
-          ),
-          this.frameCount
-        );
-        blocking {
-          newVmManager.vm.start(p)
-        }
-        newVmManager.vm.listen { event =>
-          taskQueue.put(
-            TSlaveEvent(
-              buildId,
-              event
-            )
-          )
-        }
-        p.future.map(_ => newVmManager)
-      }
-    } yield newVmManager
+  private def createSlaveVm(buildId: Int) = {
+    val slaveVm = new SlaveVm(
+      new VmManager(
+        javaBuild = builds(buildId).javaBuild,
+        slaveMode = true,
+        runnerListener = new RunnerListenerEdtAdapter(editor),
+        targetFrameCount = this.frameCount,
+        defaultRunning = true,
+        pdeEvents = this.pdeEvents.toList
+      ),
+      this.frameCount
+    );
+
+    slaveVm.vm.listen { event =>
+      taskQueue.put(
+        TSlaveEvent(
+          buildId,
+          event
+        )
+      )
+    };
+
+    slaveVm
   }
 
   private def exitVm() = {
@@ -404,15 +403,18 @@ class EditorManager(val editor: JavaEditor) {
           slaves += id;
           vmManagers match {
             case Some(vmManagers) => {
+              val slaveVm = createSlaveVm(currentBuild.id);
+              vmManagers.slaves += (id -> slaveVm);
+
               Await.ready(
                 done
-                  .completeWith(for {
-                    vm <- startSlaveVm(id)
-                    _ <- Future {
-                      assert(!vmManagers.slaves.contains(id));
-                      vmManagers.slaves += (id -> vm);
+                  .completeWith({
+                    val p = Promise[Unit]();
+                    blocking {
+                      slaveVm.vm.start(p)
                     }
-                  } yield ())
+                    p.future
+                  })
                   .future,
                 Duration.Inf
               )
