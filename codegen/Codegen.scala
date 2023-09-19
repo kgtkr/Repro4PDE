@@ -3,7 +3,6 @@ package net.kgtkr.seekprog.codegen;
 import processing.core.PGraphics
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.io.File
 
 @main def Codegen(dirPath: String) = {
   val className = "PGraphicsJava2DDummyImpl";
@@ -23,7 +22,7 @@ import java.io.File
     }
   }
 
-  var src = f"""
+  val src = f"""
     package net.kgtkr.seekprog.runtime;
 
     import processing.awt.PGraphicsJava2D

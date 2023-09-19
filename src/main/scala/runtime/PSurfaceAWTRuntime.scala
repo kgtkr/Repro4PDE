@@ -1,21 +1,8 @@
 package net.kgtkr.seekprog.runtime;
 
 import processing.awt.PSurfaceAWT
-import processing.core.PGraphics
-import processing.core.PApplet;
 import processing.core.PGraphics;
-import java.nio.channels.SocketChannel
-import java.net.StandardProtocolFamily
-import java.nio.file.Path
-import java.net.UnixDomainSocketAddress
-import processing.event.MouseEvent
-import processing.event.KeyEvent
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
-import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
-  io.circe.syntax._
-import scala.util.Try
-import processing.core.PConstants
 import java.awt.Canvas
 import java.awt.event.{
   MouseListener,
@@ -23,7 +10,6 @@ import java.awt.event.{
   MouseWheelListener,
   KeyListener
 }
-import net.kgtkr.seekprog.ext._;
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   var mouseListeners: Array[MouseListener] = null;

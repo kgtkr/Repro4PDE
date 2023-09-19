@@ -1,17 +1,10 @@
 package net.kgtkr.seekprog.runtime;
 
 import processing.core.PApplet;
-import processing.core.PGraphics;
-import java.nio.channels.SocketChannel
-import java.net.StandardProtocolFamily
-import java.nio.file.Path
-import java.net.UnixDomainSocketAddress
 import processing.event.MouseEvent
 import processing.event.KeyEvent
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
-import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
-  io.circe.syntax._
+import io.circe._, io.circe.generic.semiauto._
 import scala.util.Try
 
 class SketchHandler(

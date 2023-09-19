@@ -2,8 +2,7 @@ package net.kgtkr.seekprog.runtime;
 
 import processing.event.MouseEvent
 import processing.event.KeyEvent
-import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
-  io.circe.syntax._
+import io.circe._, io.circe.generic.semiauto._
 
 // nativeフィールドに入るシステムによって作られたイベントであることを示すマーカー
 object ReproductionEvent;

@@ -9,7 +9,8 @@ lazy val sharedSettings = Seq(
   scalaVersion := "3.3.1",
   Compile / unmanagedJars ++= Processing.processingCpTask.value,
   scalacOptions ++= Seq(
-    "-no-indent"
+    "-no-indent",
+    "-Wunused:all"
   )
 );
 

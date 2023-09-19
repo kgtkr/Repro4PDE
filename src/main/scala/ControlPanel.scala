@@ -1,9 +1,7 @@
 package net.kgtkr.seekprog;
 
-import scalafx.application.JFXApp3
 import scalafx.geometry.Insets
 import scalafx.scene.Scene
-import scalafx.scene.effect.DropShadow
 import scalafx.scene.layout.HBox
 import scalafx.scene.paint.Color._
 import scalafx.scene.paint._
@@ -23,7 +21,6 @@ import processing.mode.java.JavaEditor
 import javax.swing.SwingUtilities
 import javax.swing.JFrame
 import scalafx.embed.swing.SFXPanel
-import processing.mode.java.JavaBuild
 import scalafx.scene.layout.VBox
 import scalafx.scene.control.Button
 import scalafx.beans.property.ObjectProperty
@@ -34,13 +31,6 @@ import net.kgtkr.seekprog.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
 import scala.util.Failure
-import scalafx.beans.property.BufferProperty
-import scalafx.scene.control.ScrollPane
-import scalafx.scene.control.TableView
-import scalafx.scene.control.ListView
-import scalafx.scene.control.ListCell
-import scalafx.scene.control.CheckBox
-import scalafx.scene.control.cell.CheckBoxListCell
 
 enum PlayerState {
   case Playing;
