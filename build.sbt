@@ -47,7 +47,8 @@ lazy val root = project
       "org.scalameta" %% "munit" % "0.7.29" % Test,
       "org.scalafx" %% "scalafx" % "20.0.0-R31" excludeAll (ExclusionRule(
         organization = "org.openjfx"
-      ))
+      )),
+      "io.github.java-diff-utils" % "java-diff-utils" % "4.12"
     ),
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core",

@@ -50,8 +50,8 @@ object ControlPanel {
     val editorManager = new EditorManager(editor)
     editorManager.start()
     val playerState = ObjectProperty(PlayerState.Stopped);
-    val currentBuildIdProperty = ObjectProperty[Option[Int]](None);
-    val slaveBuildIdProperty = ObjectProperty[Option[Int]](None);
+    val currentBuildProperty = ObjectProperty[Option[Build]](None);
+    val slaveBuildProperty = ObjectProperty[Option[Build]](None);
 
     def donePromise(onSuccess: => Unit = {}) = {
       import scala.concurrent.ExecutionContext.Implicits.global
@@ -185,7 +185,7 @@ object ControlPanel {
                         playerState.value = PlayerState.Stopped
                       }
                       case EditorManager.Event.CreatedBuild(build) => {
-                        currentBuildIdProperty.value = Some(build.id)
+                        currentBuildProperty.value = Some(build)
                       }
                     }
                   }
@@ -255,40 +255,40 @@ object ControlPanel {
                   new Button {
                     text <== Bindings.createStringBinding(
                       () =>
-                        if (slaveBuildIdProperty.value.isDefined) {
+                        if (slaveBuildProperty.value.isDefined) {
                           "並列実行を無効化する"
                         } else {
                           "並列実行を有効化する"
                         },
-                      slaveBuildIdProperty
+                      slaveBuildProperty
                     )
                     disable <==
                       Bindings.createBooleanBinding(
                         () =>
-                          loading.value || currentBuildIdProperty.value.isEmpty,
+                          loading.value || currentBuildProperty.value.isEmpty,
                         loading,
-                        currentBuildIdProperty
+                        currentBuildProperty
                       )
                     onAction = _ => {
-                      currentBuildIdProperty.value match {
-                        case Some(currentBuildId) if !loading.value => {
-                          slaveBuildIdProperty.value match {
-                            case Some(slaveBuildId) => {
+                      currentBuildProperty.value match {
+                        case Some(currentBuild) if !loading.value => {
+                          slaveBuildProperty.value match {
+                            case Some(slaveBuild) => {
                               loading.value = true
-                              slaveBuildIdProperty.value = None
+                              slaveBuildProperty.value = None
                               editorManager.send(
                                 EditorManager.Cmd.RemoveSlave(
-                                  slaveBuildId,
+                                  slaveBuild.id,
                                   donePromise()
                                 )
                               )
                             }
                             case None => {
                               loading.value = true
-                              slaveBuildIdProperty.value = Some(currentBuildId)
+                              slaveBuildProperty.value = Some(currentBuild)
                               editorManager.send(
                                 EditorManager.Cmd.AddSlave(
-                                  currentBuildId,
+                                  currentBuild.id,
                                   donePromise()
                                 )
                               )
