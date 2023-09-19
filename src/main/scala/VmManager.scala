@@ -33,6 +33,7 @@ import scala.concurrent.Promise
 import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
+import processing.app.Messages
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -220,7 +221,7 @@ class VmManager(
           task match {
             case TVmEvent(eventSet) => {
               for (evt <- eventSet.asScala) {
-                println(evt);
+                Messages.log(evt.toString());
                 evt match {
                   case evt: ClassPrepareEvent => {
                     val classType = evt.referenceType().asInstanceOf[ClassType];
@@ -363,7 +364,7 @@ class VmManager(
                       done.success(());
                     }
                     case progressCmd => {
-                      println("Unexpected event: OnTargetFrameCount");
+                      Messages.log("Unexpected event: OnTargetFrameCount");
                     }
                   }
                 }
@@ -394,7 +395,7 @@ class VmManager(
                       cmd.done.success(());
                     }
                     case progressCmd => {
-                      println("Unexpected event: OnPaused");
+                      Messages.log("Unexpected event: OnPaused");
                     }
                   }
                 }
@@ -405,7 +406,7 @@ class VmManager(
                       cmd.done.success(());
                     }
                     case progressCmd => {
-                      println("Unexpected event: OnResumed");
+                      Messages.log("Unexpected event: OnResumed");
                     }
                   }
                 }
@@ -419,7 +420,7 @@ class VmManager(
         }
       } catch {
         case e: Exception => {
-          e.printStackTrace();
+          Messages.err("error", e);
         }
       }
 
@@ -456,7 +457,7 @@ class VmManager(
 
   def sendSlaveSync(cmd: SlaveSyncCmd) = {
     if (exited) {
-      println("sendSlaveSync warning: vm is exited");
+      Messages.log("sendSlaveSync warning: vm is exited");
     }
     taskQueue.add(TSlaveSyncCmd(cmd));
   }

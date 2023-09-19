@@ -31,6 +31,7 @@ import net.kgtkr.seekprog.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
 import scala.util.Failure
+import processing.app.Messages
 
 enum PlayerState {
   case Playing;
@@ -66,7 +67,7 @@ object ControlPanel {
             onSuccess
           }
           case Failure(e) => {
-            e.printStackTrace();
+            Messages.err("error", e);
           }
         }
       })
@@ -115,7 +116,7 @@ object ControlPanel {
                 }
               }
               case evt => {
-                println(s"unknown event: ${evt}")
+                Messages.log(s"unknown event: ${evt}")
               }
             }
           }

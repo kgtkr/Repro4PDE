@@ -15,6 +15,7 @@ import scala.concurrent.duration.Duration
 import scala.collection.mutable.Map as MMap
 import scala.collection.mutable.Set as MSet
 import processing.app.RunnerListenerEdtAdapter
+import processing.app.Messages
 
 object EditorManager {
   enum Cmd {
@@ -89,7 +90,7 @@ class EditorManager(val editor: JavaEditor) {
       );
     } catch {
       case e: Exception => {
-        e.printStackTrace();
+        Messages.err("error", e);
         editor.statusError(e);
         throw e;
       }

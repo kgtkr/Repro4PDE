@@ -10,6 +10,7 @@ import java.awt.event.{
   MouseWheelListener,
   KeyListener
 }
+import processing.app.Messages
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   var mouseListeners: Array[MouseListener] = null;
@@ -139,9 +140,9 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
               0
             }
 
-          /* if (addSleepTime > 0) {
-            println("addSleepTime: " + addSleepTime / 1000000.0 + "ms");
-          } */
+          if (addSleepTime > 0) {
+            Messages.log("addSleepTime: " + addSleepTime / 1000000.0 + "ms");
+          }
 
           val afterTime = System.nanoTime();
           val timeDiff = afterTime - beforeTime;
