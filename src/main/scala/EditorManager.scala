@@ -16,6 +16,9 @@ import scala.collection.mutable.Map as MMap
 import scala.collection.mutable.Set as MSet
 import processing.app.RunnerListenerEdtAdapter
 import processing.app.Messages
+import javax.swing.text.Segment
+import processing.app.syntax.PdeTextAreaDefaults
+import processing.app.syntax.Token
 
 object EditorManager {
   enum Cmd {
@@ -76,13 +79,54 @@ class EditorManager(val editor: JavaEditor) {
   var isExit = false;
   var masterLocation: Option[java.awt.Point] = None;
   val slaveLocations: MMap[Int, java.awt.Point] = MMap();
+  val styles = new PdeTextAreaDefaults().styles;
 
   private def updateBuild() = {
     try {
       editor.prepareRun();
       val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
-      currentBuild = new Build(this.builds.length, javaBuild);
+
+      val codes = Map.from(
+        editor
+          .getSketch()
+          .getCode()
+          .map { code =>
+            val text = code.getProgram();
+            val state =
+              editor.getMode().getTokenMarker().createStateInstance();
+            val lineTexts = text.split("\\r?\\n")
+            state.insertLines(0, lineTexts.length)
+            val lines =
+              lineTexts.zipWithIndex.map { (line, i) =>
+                val token = state.markTokens(
+                  new Segment(line.toCharArray(), 0, line.length),
+                  i
+                );
+                var offset = 0;
+                val tokens = Iterator
+                  .iterate(token)(_.next)
+                  .takeWhile(_ != null)
+                  .takeWhile(_.id != Token.END)
+                  .map { token =>
+                    val color = styles(token.id).getColor();
+
+                    val tokenStr =
+                      line.substring(offset, offset + token.length);
+                    offset += token.length;
+                    BuildCodeToken(tokenStr, color)
+                  }
+                  .toList
+                BuildCodeLine(line, tokens)
+              }.toList;
+
+            val name = code.getFileName();
+
+            (name, BuildCode(name, lines))
+          }
+      )
+
+      currentBuild = new Build(this.builds.length, javaBuild, codes);
 
       this.builds += currentBuild;
       this.eventListeners.foreach(
