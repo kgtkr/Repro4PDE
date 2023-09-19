@@ -31,7 +31,8 @@ import net.kgtkr.seekprog.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
 import scala.util.Failure
-import processing.app.Messages
+import scalafx.scene.Node
+import com.github.difflib.DiffUtils
 
 enum PlayerState {
   case Playing;
@@ -52,6 +53,26 @@ object ControlPanel {
     val playerState = ObjectProperty(PlayerState.Stopped);
     val currentBuildProperty = ObjectProperty[Option[Build]](None);
     val slaveBuildProperty = ObjectProperty[Option[Build]](None);
+    val diffNodeProperty = ObjectProperty[Node](new VBox());
+
+    def updateDiffNodeProperty() = {
+      (slaveBuildProperty.value, currentBuildProperty.value) match {
+        case (Some(slaveBuild), Some(currentBuild)) => {
+          diffNodeProperty.value = createDiffNode(slaveBuild, currentBuild)
+        }
+        case _ => {
+          diffNodeProperty.value = new VBox()
+        }
+      }
+    }
+
+    currentBuildProperty.onChange { (_, _, _) =>
+      updateDiffNodeProperty()
+    }
+
+    slaveBuildProperty.onChange { (_, _, _) =>
+      updateDiffNodeProperty()
+    }
 
     def donePromise(onSuccess: => Unit = {}) = {
       import scala.concurrent.ExecutionContext.Implicits.global
@@ -67,7 +88,7 @@ object ControlPanel {
             onSuccess
           }
           case Failure(e) => {
-            Messages.err("error", e);
+            Logger.err(e);
           }
         }
       })
@@ -116,7 +137,7 @@ object ControlPanel {
                 }
               }
               case evt => {
-                Messages.log(s"unknown event: ${evt}")
+                Logger.log(s"unknown event: ${evt}")
               }
             }
           }
@@ -300,6 +321,11 @@ object ControlPanel {
                     }
                   }
                 )
+              },
+              new VBox {
+                diffNodeProperty.onChange { (_, _, _) =>
+                  children = diffNodeProperty.value
+                }
               }
             )
           }
@@ -313,5 +339,51 @@ object ControlPanel {
         });
       });
     });
+  }
+
+  private def createDiffNode(build1: Build, build2: Build): Node = {
+    val deletedFiles =
+      build1.codes.keySet
+        .diff(build2.codes.keySet)
+        .toList
+        .sorted
+        .map { filename =>
+          new Text {
+            text = s"deleted: ${filename}"
+            fill = Red
+          }
+        };
+    val addedFiles =
+      build2.codes.keySet.diff(build1.codes.keySet).toList.sorted.map {
+        filename =>
+          new Text {
+            text = s"added: ${filename}"
+            fill = Green
+          }
+      }
+
+    val changedFiles =
+      build1.codes.keySet.intersect(build2.codes.keySet).toList.sorted.flatMap {
+        file =>
+          val code1 = build1.codes(file);
+          val code2 = build2.codes(file);
+          val diff = DiffUtils.diff(
+            code1.lines.map(_.line).asJava,
+            code2.lines.map(_.line).asJava
+          );
+          val deltas = diff.getDeltas().asScala.toList;
+          if (deltas.isEmpty) {
+            None
+          } else {
+            Some(new Text {
+              text = s"changed: ${file}"
+              fill = Blue
+            })
+          }
+      }
+
+    new VBox {
+      children = deletedFiles ++ addedFiles ++ changedFiles
+    }
   }
 }

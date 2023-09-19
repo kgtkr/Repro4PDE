@@ -6,7 +6,7 @@ import processing.event.KeyEvent
 import scala.collection.mutable.Buffer
 import io.circe._, io.circe.generic.semiauto._
 import scala.util.Try
-import processing.app.Messages
+import net.kgtkr.seekprog.Logger
 
 class SketchHandler(
     applet: PApplet,
@@ -41,7 +41,7 @@ class SketchHandler(
       }
       val endTime = System.nanoTime();
       val ms = (endTime - this.startTime) / 1000000.0;
-      Messages.log(
+      Logger.log(
         "onTarget: " + ms + "ms, " +
           "targetFrameCount: " + this.targetFrameCount + ", " +
           "frameRate: " + this.targetFrameCount / ms * 1000

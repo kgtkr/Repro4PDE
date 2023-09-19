@@ -15,10 +15,10 @@ import scala.concurrent.duration.Duration
 import scala.collection.mutable.Map as MMap
 import scala.collection.mutable.Set as MSet
 import processing.app.RunnerListenerEdtAdapter
-import processing.app.Messages
 import javax.swing.text.Segment
 import processing.app.syntax.PdeTextAreaDefaults
 import processing.app.syntax.Token
+import java.awt.Color
 
 object EditorManager {
   enum Cmd {
@@ -86,7 +86,6 @@ class EditorManager(val editor: JavaEditor) {
       editor.prepareRun();
       val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
-
       val codes = Map.from(
         editor
           .getSketch()
@@ -109,7 +108,8 @@ class EditorManager(val editor: JavaEditor) {
                   .takeWhile(_ != null)
                   .takeWhile(_.id != Token.END)
                   .map { token =>
-                    val color = styles(token.id).getColor();
+                    val style = Option(styles(token.id));
+                    val color = style.map(_.getColor()).getOrElse(Color.BLACK)
 
                     val tokenStr =
                       line.substring(offset, offset + token.length);
@@ -134,7 +134,7 @@ class EditorManager(val editor: JavaEditor) {
       );
     } catch {
       case e: Exception => {
-        Messages.err("error", e);
+        Logger.err(e);
         editor.statusError(e);
         throw e;
       }

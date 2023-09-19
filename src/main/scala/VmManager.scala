@@ -33,7 +33,6 @@ import scala.concurrent.Promise
 import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
-import processing.app.Messages
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -221,7 +220,7 @@ class VmManager(
           task match {
             case TVmEvent(eventSet) => {
               for (evt <- eventSet.asScala) {
-                Messages.log(evt.toString());
+                Logger.log(evt.toString());
                 evt match {
                   case evt: ClassPrepareEvent => {
                     val classType = evt.referenceType().asInstanceOf[ClassType];
@@ -364,7 +363,7 @@ class VmManager(
                       done.success(());
                     }
                     case progressCmd => {
-                      Messages.log("Unexpected event: OnTargetFrameCount");
+                      Logger.log("Unexpected event: OnTargetFrameCount");
                     }
                   }
                 }
@@ -395,7 +394,7 @@ class VmManager(
                       cmd.done.success(());
                     }
                     case progressCmd => {
-                      Messages.log("Unexpected event: OnPaused");
+                      Logger.log("Unexpected event: OnPaused");
                     }
                   }
                 }
@@ -406,7 +405,7 @@ class VmManager(
                       cmd.done.success(());
                     }
                     case progressCmd => {
-                      Messages.log("Unexpected event: OnResumed");
+                      Logger.log("Unexpected event: OnResumed");
                     }
                   }
                 }
@@ -420,7 +419,7 @@ class VmManager(
         }
       } catch {
         case e: Exception => {
-          Messages.err("error", e);
+          Logger.err(e);
         }
       }
 
@@ -457,7 +456,7 @@ class VmManager(
 
   def sendSlaveSync(cmd: SlaveSyncCmd) = {
     if (exited) {
-      Messages.log("sendSlaveSync warning: vm is exited");
+      Logger.log("sendSlaveSync warning: vm is exited");
     }
     taskQueue.add(TSlaveSyncCmd(cmd));
   }
