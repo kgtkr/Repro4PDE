@@ -6,7 +6,7 @@ lazy val codegenSeekprog =
   taskKey[Seq[File]]("Seekprog codegen")
 
 lazy val sharedSettings = Seq(
-  scalaVersion := "3.3.0",
+  scalaVersion := "3.3.1",
   Compile / unmanagedJars ++= Processing.processingCpTask.value,
   scalacOptions ++= Seq(
     "-no-indent"

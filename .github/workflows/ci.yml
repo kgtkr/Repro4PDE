@@ -20,7 +20,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Seekprog
-          path: target/scala-3.3.0/Seekprog.zip
+          path: target/scala-3.3.1/Seekprog.zip
   deploy:
     permissions:
       pages: write
