@@ -33,6 +33,12 @@ import scala.util.Success
 import scala.util.Failure
 import scalafx.scene.Node
 import com.github.difflib.DiffUtils
+import scalafx.scene.layout.Background
+import scalafx.scene.layout.BackgroundFill
+import scalafx.scene.text.TextFlow
+import scalafx.scene.layout.GridPane
+import scalafx.scene.layout.StackPane
+import scalafx.scene.layout.ColumnConstraints
 
 enum PlayerState {
   case Playing;
@@ -350,7 +356,6 @@ object ControlPanel {
         .map { filename =>
           new Text {
             text = s"deleted: ${filename}"
-            fill = Red
           }
         };
     val addedFiles =
@@ -358,7 +363,6 @@ object ControlPanel {
         filename =>
           new Text {
             text = s"added: ${filename}"
-            fill = Green
           }
       }
 
@@ -375,9 +379,64 @@ object ControlPanel {
           if (deltas.isEmpty) {
             None
           } else {
-            Some(new Text {
-              text = s"changed: ${file}"
-              fill = Blue
+            Some(new VBox {
+              children = Seq(
+                new Text {
+                  text = s"changed: ${file}"
+                },
+                new GridPane {
+                  background = new Background(
+                    Array(
+                      new BackgroundFill(White, null, null)
+                    )
+                  )
+                  columnConstraints ++= Seq(
+                    new ColumnConstraints(100),
+                    new ColumnConstraints(100)
+                  )
+                  var offset = 0;
+                  deltas.foreach { delta =>
+                    delta.getSource().getLines().asScala.zipWithIndex.foreach {
+                      (line, i) =>
+                        add(
+                          new StackPane {
+                            children = Seq(new TextFlow {
+                              children = Seq(new Text {
+                                text = line
+                              })
+                            })
+                            style = "-fx-background-color: #ffcccc"
+                          },
+                          0,
+                          offset + i
+                        )
+                    }
+
+                    delta.getTarget().getLines().asScala.zipWithIndex.map {
+                      (line, i) =>
+                        add(
+                          new StackPane {
+                            children = Seq(new TextFlow {
+                              children = Seq(new Text {
+                                text = line
+                              })
+                            })
+                            style = "-fx-background-color: #ccffcc"
+                          },
+                          1,
+                          offset + i
+                        )
+                    }
+
+                    offset += delta
+                      .getSource()
+                      .size()
+                      .max(
+                        delta.getTarget().size()
+                      );
+                  }
+                }
+              )
             })
           }
       }
