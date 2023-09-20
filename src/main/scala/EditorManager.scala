@@ -536,7 +536,7 @@ class EditorManager(val editor: JavaEditor) {
         for ((event, i) <- events.zipWithIndex) {
           this.pdeEvents(frameCount - events.length + i) = event;
         }
-        for ((_, slaveVm) <- vmms.slaves) {
+        for ((_, slaveVm) <- vmms.slaves.filter(!_._2.vmManager.isExited)) {
           slaveVm.vmManager.sendSlaveSync(
             VmManager.SlaveSyncCmd.AddedEvents(
               pdeEvents
@@ -582,7 +582,9 @@ class EditorManager(val editor: JavaEditor) {
         this.slaveLocations(slaveVm.buildId) =
           new java.awt.Point(windowX, windowY);
       }
-      case VmManager.Event.Stopped() => {}
+      case VmManager.Event.Stopped() => {
+        updateSlaveVms();
+      }
     }
   }
 
