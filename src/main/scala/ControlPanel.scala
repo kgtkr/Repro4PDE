@@ -164,166 +164,171 @@ object ControlPanel {
           );
           fileWatchThread.interrupt();
         }
-        scene = new Scene {
+        scene = new Scene(400, 200) {
           fill = Color.rgb(240, 240, 240)
           content = new BorderPane {
-            style = "-fx-font: normal bold 10pt sans-serif"
             center = new VBox {
               padding = Insets(50, 80, 50, 80)
+              style = "-fx-font: normal bold 10pt sans-serif"
               children = Seq(
-                new HBox {
-                  val slider = new Slider(0, 0, 0) {
-                    disable <== loading
-                    valueChanging.addListener({ (_, oldChanging, changing) =>
-                      if (oldChanging && !changing && !loading.value) {
-                        loading.value = true
-                        editorManager.send(
-                          EditorManager.Cmd.UpdateLocation(
-                            (value.value * 60).toInt,
-                            donePromise()
-                          )
-                        );
-                      }
-                      ()
-                    })
-                  };
-                  editorManager.listen { event =>
-                    Platform.runLater {
-                      event match {
-                        case EditorManager.Event
-                              .UpdateLocation(value2, max2) => {
-                          slider.max = max2.toDouble / 60
-                          if (!slider.valueChanging.value) {
-                            slider.value = value2.toDouble / 60
+                new VBox {
+                  children = Seq(
+                    new HBox {
+                      val slider = new Slider(0, 0, 0) {
+                        disable <== loading
+                        valueChanging.addListener({
+                          (_, oldChanging, changing) =>
+                            if (oldChanging && !changing && !loading.value) {
+                              loading.value = true
+                              editorManager.send(
+                                EditorManager.Cmd.UpdateLocation(
+                                  (value.value * 60).toInt,
+                                  donePromise()
+                                )
+                              );
+                            }
+                            ()
+                        })
+                      };
+                      editorManager.listen { event =>
+                        Platform.runLater {
+                          event match {
+                            case EditorManager.Event
+                                  .UpdateLocation(value2, max2) => {
+                              slider.max = max2.toDouble / 60
+                              if (!slider.valueChanging.value) {
+                                slider.value = value2.toDouble / 60
+                              }
+                            }
+                            case EditorManager.Event.Stopped() => {
+                              playerState.value = PlayerState.Stopped
+                            }
+                            case EditorManager.Event.CreatedBuild(build) => {
+                              currentBuildProperty.value = Some(build)
+                            }
                           }
                         }
-                        case EditorManager.Event.Stopped() => {
-                          playerState.value = PlayerState.Stopped
-                        }
-                        case EditorManager.Event.CreatedBuild(build) => {
-                          currentBuildProperty.value = Some(build)
-                        }
-                      }
-                    }
-                  };
+                      };
 
-                  children = Seq(
-                    slider,
-                    new Text {
-                      text <== Bindings.createStringBinding(
-                        () =>
-                          f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
-                        slider.value,
-                        slider.max
-                      )
-                    }
-                  )
-                },
-                new HBox(10) {
-                  alignment = scalafx.geometry.Pos.Center
-                  children = Seq(
-                    new Button {
-                      text <== Bindings.createStringBinding(
-                        () =>
-                          if (playerState.value == PlayerState.Playing) {
-                            "⏸"
-                          } else {
-                            "▶"
-                          },
-                        playerState
-                      )
-                      disable <== loading
-                      onAction = _ => {
-                        playerState.value match {
-                          case PlayerState.Playing => {
-                            loading.value = true
-                            editorManager.send(
-                              EditorManager.Cmd.PauseSketch(donePromise {
-                                Platform.runLater {
-                                  playerState.value = PlayerState.Paused;
-                                }
-                              })
-                            )
-                          }
-                          case PlayerState.Paused => {
-                            loading.value = true
-                            editorManager.send(
-                              EditorManager.Cmd.ResumeSketch(donePromise {
-                                Platform.runLater {
-                                  playerState.value = PlayerState.Playing;
-                                }
-                              })
-                            )
-                          }
-                          case PlayerState.Stopped => {
-                            loading.value = true
-                            editorManager.send(
-                              EditorManager.Cmd.StartSketch(donePromise {
-                                Platform.runLater {
-                                  playerState.value = PlayerState.Playing;
-                                }
-                              })
-                            )
-                          }
+                      children = Seq(
+                        slider,
+                        new Text {
+                          text <== Bindings.createStringBinding(
+                            () =>
+                              f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
+                            slider.value,
+                            slider.max
+                          )
                         }
-                      }
-                    },
-                    new Button {
-                      text <== Bindings.createStringBinding(
-                        () =>
-                          if (slaveBuildProperty.value.isDefined) {
-                            "並列実行を無効化する"
-                          } else {
-                            "並列実行を有効化する"
-                          },
-                        slaveBuildProperty
                       )
-                      disable <==
-                        Bindings.createBooleanBinding(
-                          () =>
-                            loading.value || currentBuildProperty.value.isEmpty,
-                          loading,
-                          currentBuildProperty
-                        )
-                      onAction = _ => {
-                        currentBuildProperty.value match {
-                          case Some(currentBuild) if !loading.value => {
-                            slaveBuildProperty.value match {
-                              case Some(slaveBuild) => {
+                    },
+                    new HBox(10) {
+                      alignment = scalafx.geometry.Pos.Center
+                      children = Seq(
+                        new Button {
+                          text <== Bindings.createStringBinding(
+                            () =>
+                              if (playerState.value == PlayerState.Playing) {
+                                "⏸"
+                              } else {
+                                "▶"
+                              },
+                            playerState
+                          )
+                          disable <== loading
+                          onAction = _ => {
+                            playerState.value match {
+                              case PlayerState.Playing => {
                                 loading.value = true
-                                slaveBuildProperty.value = None
                                 editorManager.send(
-                                  EditorManager.Cmd.RemoveSlave(
-                                    slaveBuild.id,
-                                    donePromise()
-                                  )
+                                  EditorManager.Cmd.PauseSketch(donePromise {
+                                    Platform.runLater {
+                                      playerState.value = PlayerState.Paused;
+                                    }
+                                  })
                                 )
                               }
-                              case None => {
+                              case PlayerState.Paused => {
                                 loading.value = true
-                                slaveBuildProperty.value = Some(currentBuild)
                                 editorManager.send(
-                                  EditorManager.Cmd.AddSlave(
-                                    currentBuild.id,
-                                    donePromise()
-                                  )
+                                  EditorManager.Cmd.ResumeSketch(donePromise {
+                                    Platform.runLater {
+                                      playerState.value = PlayerState.Playing;
+                                    }
+                                  })
+                                )
+                              }
+                              case PlayerState.Stopped => {
+                                loading.value = true
+                                editorManager.send(
+                                  EditorManager.Cmd.StartSketch(donePromise {
+                                    Platform.runLater {
+                                      playerState.value = PlayerState.Playing;
+                                    }
+                                  })
                                 )
                               }
                             }
                           }
-                          case _ => {}
+                        },
+                        new Button {
+                          text <== Bindings.createStringBinding(
+                            () =>
+                              if (slaveBuildProperty.value.isDefined) {
+                                "並列実行を無効化する"
+                              } else {
+                                "並列実行を有効化する"
+                              },
+                            slaveBuildProperty
+                          )
+                          disable <==
+                            Bindings.createBooleanBinding(
+                              () =>
+                                loading.value || currentBuildProperty.value.isEmpty,
+                              loading,
+                              currentBuildProperty
+                            )
+                          onAction = _ => {
+                            currentBuildProperty.value match {
+                              case Some(currentBuild) if !loading.value => {
+                                slaveBuildProperty.value match {
+                                  case Some(slaveBuild) => {
+                                    loading.value = true
+                                    slaveBuildProperty.value = None
+                                    editorManager.send(
+                                      EditorManager.Cmd.RemoveSlave(
+                                        slaveBuild.id,
+                                        donePromise()
+                                      )
+                                    )
+                                  }
+                                  case None => {
+                                    loading.value = true
+                                    slaveBuildProperty.value =
+                                      Some(currentBuild)
+                                    editorManager.send(
+                                      EditorManager.Cmd.AddSlave(
+                                        currentBuild.id,
+                                        donePromise()
+                                      )
+                                    )
+                                  }
+                                }
+                              }
+                              case _ => {}
+                            }
+                          }
                         }
-                      }
+                      )
                     }
                   )
+                },
+                new Pane {
+                  diffNodeProperty.onChange { (_, _, _) =>
+                    children = Seq(diffNodeProperty.value)
+                  }
                 }
               )
-            }
-            bottom = new Pane {
-              prefHeight = 50
-              diffNodeProperty.onChange { (_, _, _) =>
-                children = Seq(diffNodeProperty.value)
-              }
             }
           }
         }
