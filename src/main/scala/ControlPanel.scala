@@ -18,15 +18,10 @@ import com.sun.nio.file.SensitivityWatchEventModifier
 import scalafx.application.Platform
 import scalafx.beans.binding.Bindings
 import processing.mode.java.JavaEditor
-import javax.swing.SwingUtilities
-import javax.swing.JFrame
-import scalafx.embed.swing.SFXPanel
 import scalafx.scene.layout.VBox
 import scalafx.scene.control.Button
 import scalafx.beans.property.ObjectProperty
 import scalafx.beans.property.BooleanProperty
-import javax.swing.WindowConstants
-import java.awt.event.WindowAdapter
 import net.kgtkr.seekprog.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
@@ -39,6 +34,7 @@ import scalafx.scene.text.TextFlow
 import scalafx.scene.layout.GridPane
 import scalafx.scene.layout.ColumnConstraints
 import scalafx.scene.layout.Pane
+import scalafx.stage.Stage
 
 enum PlayerState {
   case Playing;
@@ -49,6 +45,7 @@ enum PlayerState {
 object ControlPanel {
   def init() = {
     Platform.implicitExit = false;
+    Platform.startup(() => {});
   }
 
   def show(editor: JavaEditor) = {
@@ -155,28 +152,18 @@ object ControlPanel {
       });
     fileWatchThread.start();
 
-    SwingUtilities.invokeLater(() => {
-      val frame = new JFrame("Seekprog");
-      val fxPanel = new SFXPanel();
-      frame.add(fxPanel);
-      frame.setSize(300, 200);
-      frame.setVisible(true);
-      frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-      frame.addWindowListener(new WindowAdapter() {
-        override def windowClosing(e: java.awt.event.WindowEvent) = {
-          Platform.runLater {
-            loading.value = true
-            editorManager.send(
-              EditorManager.Cmd.Exit(donePromise())
-            );
-            frame.dispose()
-            fileWatchThread.interrupt();
-          }
-        }
-      });
+    Platform.runLater(() => {
 
-      Platform.runLater(() => {
-        val scene = new Scene {
+      val stage = new Stage {
+        title = "Seekprog"
+        onCloseRequest = _ => {
+          loading.value = true
+          editorManager.send(
+            EditorManager.Cmd.Exit(donePromise())
+          );
+          fileWatchThread.interrupt();
+        }
+        scene = new Scene {
           fill = Color.rgb(240, 240, 240)
           content = new VBox {
             style = "-fx-font: normal bold 10pt sans-serif"
@@ -336,14 +323,9 @@ object ControlPanel {
             )
           }
 
-        };
-
-        fxPanel.setScene(scene);
-
-        SwingUtilities.invokeLater(() => {
-          frame.pack();
-        });
-      });
+        }
+      };
+      stage.show();
     });
   }
 
