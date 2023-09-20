@@ -24,6 +24,7 @@ object BuildTool {
     for (
       file <- (Compile / dependencyClasspathAsJars).value
         .filterNot(jar => exclude.contains(jar.data.getPath()))
+        .filterNot(jar => jar.data.getName().contains("javafx-web"))
     ) {
       IO.copyFile(
         file.data,

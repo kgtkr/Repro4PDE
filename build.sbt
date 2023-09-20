@@ -61,8 +61,8 @@ lazy val root = project
       "javafx-fxml",
       "javafx-graphics",
       "javafx-media",
-      "javafx-swing"
-      // "javafx-web" // サイズが大きいかつ使わないので
+      "javafx-swing",
+      "javafx-web"
     ).map(artifact =>
       Seq(
         "linux",
