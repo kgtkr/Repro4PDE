@@ -37,9 +37,7 @@ import scalafx.scene.layout.Pane
 import scalafx.stage.Stage
 import scalafx.scene.layout.BorderPane
 import scalafx.scene.control.ScrollPane
-import scalafx.scene.control.Label
 import scalafx.geometry.Pos
-import scalafx.scene.layout.AnchorPane
 import scalafx.scene.layout.Priority
 import scalafx.scene.layout.Region
 
