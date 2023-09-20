@@ -287,7 +287,8 @@ class VmManager(
                                else pdeEvents.toList).asJson.noSpaces
                             ),
                             vm.mirrorOf(!running),
-                            vm.mirrorOf(slaveMode)
+                            vm.mirrorOf(slaveMode),
+                            vm.mirrorOf(SeekprogTool.isDebug)
                           ),
                           0
                         );

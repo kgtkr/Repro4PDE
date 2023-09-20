@@ -27,17 +27,20 @@ object RuntimeMain {
   var slaveMode = false;
   val addedEventsQueue = new LinkedTransferQueue[List[List[PdeEventWrapper]]]();
   var frameCountLimit = Int.MaxValue;
+  var isDebug = false;
 
   def init(
       sketch: PApplet,
       targetFrameCount: Int,
       events: String,
       initPaused: Boolean,
-      slaveMode: Boolean
+      slaveMode: Boolean,
+      isDebug: Boolean
   ) = {
     this.paused = initPaused;
     this.slaveMode = slaveMode;
     this.notTriggerPausedEvent = initPaused;
+    this.isDebug = isDebug;
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
     Class.forName(renderer);
     {
@@ -103,6 +106,12 @@ object RuntimeMain {
     sketch.registerMethod("pre", sketchHandler);
     sketch.registerMethod("mouseEvent", sketchHandler);
     sketch.registerMethod("keyEvent", sketchHandler);
+  }
+
+  def log(msg: String) = {
+    if (isDebug) {
+      println(s"[INFO] runtime: $msg");
+    }
   }
 }
 
