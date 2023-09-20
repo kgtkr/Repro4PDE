@@ -24,6 +24,10 @@ class SeekprogTool(toolName: String) extends Tool {
 
   override def run() = {
     val editor = this.base.getActiveEditor().asInstanceOf[JavaEditor]
-    ControlPanel.show(editor)
+    if (editor.getSketch().isUntitled()) {
+      editor.statusError("Seekprog not support untitled sketch")
+    } else {
+      ControlPanel.show(editor)
+    }
   }
 }

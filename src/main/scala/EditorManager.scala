@@ -83,7 +83,8 @@ class EditorManager(val editor: JavaEditor) {
 
   private def updateBuild() = {
     try {
-      editor.prepareRun();
+      editor.statusEmpty();
+      editor.clearConsole();
       val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
       val codes = Map.from(
