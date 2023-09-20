@@ -37,8 +37,8 @@ import scalafx.scene.layout.Background
 import scalafx.scene.layout.BackgroundFill
 import scalafx.scene.text.TextFlow
 import scalafx.scene.layout.GridPane
-import scalafx.scene.layout.StackPane
 import scalafx.scene.layout.ColumnConstraints
+import scalafx.scene.layout.Pane
 
 enum PlayerState {
   case Playing;
@@ -391,15 +391,19 @@ object ControlPanel {
                     )
                   )
                   columnConstraints ++= Seq(
-                    new ColumnConstraints(100),
-                    new ColumnConstraints(100)
+                    new ColumnConstraints {
+                      percentWidth = 50
+                    },
+                    new ColumnConstraints {
+                      percentWidth = 50
+                    }
                   )
                   var offset = 0;
                   deltas.foreach { delta =>
                     delta.getSource().getLines().asScala.zipWithIndex.foreach {
                       (line, i) =>
                         add(
-                          new StackPane {
+                          new Pane {
                             children = Seq(new TextFlow {
                               children = Seq(new Text {
                                 text = line
@@ -415,7 +419,7 @@ object ControlPanel {
                     delta.getTarget().getLines().asScala.zipWithIndex.map {
                       (line, i) =>
                         add(
-                          new StackPane {
+                          new Pane {
                             children = Seq(new TextFlow {
                               children = Seq(new Text {
                                 text = line
