@@ -34,6 +34,7 @@ import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
 import com.sun.jdi.VMDisconnectedException
+import com.sun.jdi.event.VMDeathEvent
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -74,6 +75,7 @@ object VmManager {
     case Running;
     case ExitCmd;
     case Exception;
+    case VmDeath;
   }
 
 }
@@ -305,6 +307,9 @@ class VmManager(
                     runner.exceptionEvent(evt);
                     exitType = ExitType.Exception;
                   }
+                  case evt: VMDeathEvent => {
+                    exitType = ExitType.VmDeath;
+                  }
                   case _ => {}
                 }
               }
@@ -422,7 +427,7 @@ class VmManager(
             }
           }
 
-          if (exitType != ExitType.ExitCmd) {
+          if (exitType != ExitType.ExitCmd || exitType != ExitType.VmDeath) {
             vm.resume();
           }
         }
@@ -442,14 +447,18 @@ class VmManager(
       exitType match {
         case ExitType.Running | ExitType.Exception => {
           vmForForceExit = Some(vm);
-          this.eventListeners.foreach(
-            _(
-              Event.Stopped()
-            )
-          )
         }
         case _ => {}
       }
+
+      if (exitType != ExitType.ExitCmd) {
+        this.eventListeners.foreach(
+          _(
+            Event.Stopped()
+          )
+        )
+      }
+
       exited = true;
     }).start();
   }
