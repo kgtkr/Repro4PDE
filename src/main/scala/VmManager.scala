@@ -33,6 +33,7 @@ import scala.concurrent.Promise
 import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
+import com.sun.jdi.VMDisconnectedException
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -204,9 +205,16 @@ class VmManager(
     {
       val eventQueue = vm.eventQueue();
       val thread = new Thread(() => {
-        while (true) {
-          taskQueue.add(TVmEvent(eventQueue.remove()));
+        try {
+          while (true) {
+            taskQueue.add(TVmEvent(eventQueue.remove()));
+
+          }
+        } catch {
+          case _: VMDisconnectedException => {}
+          case _: InterruptedException    => {}
         }
+
       });
       thread.start();
       threads += thread;
