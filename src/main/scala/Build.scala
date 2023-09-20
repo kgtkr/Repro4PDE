@@ -15,6 +15,7 @@ case class BuildCode(
 );
 
 case class BuildCodeLine(
+    val number: Int,
     val line: String,
     val tokens: List[BuildCodeToken]
 )

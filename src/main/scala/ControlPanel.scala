@@ -36,6 +36,12 @@ import scalafx.scene.layout.ColumnConstraints
 import scalafx.scene.layout.Pane
 import scalafx.stage.Stage
 import scalafx.scene.layout.BorderPane
+import scalafx.scene.control.ScrollPane
+import scalafx.scene.control.Label
+import scalafx.geometry.Pos
+import scalafx.scene.layout.AnchorPane
+import scalafx.scene.layout.Priority
+import scalafx.scene.layout.Region
 
 enum PlayerState {
   case Playing;
@@ -57,7 +63,7 @@ object ControlPanel {
     val playerState = ObjectProperty(PlayerState.Stopped);
     val currentBuildProperty = ObjectProperty[Option[Build]](None);
     val slaveBuildProperty = ObjectProperty[Option[Build]](None);
-    val diffNodeProperty = ObjectProperty[Node](new VBox());
+    val diffNodeProperty = ObjectProperty[Region](new VBox());
 
     def updateDiffNodeProperty() = {
       (slaveBuildProperty.value, currentBuildProperty.value) match {
@@ -164,16 +170,19 @@ object ControlPanel {
           );
           fileWatchThread.interrupt();
         }
-        scene = new Scene(400, 200) {
+        scene = new Scene(600, 300) {
           fill = Color.rgb(240, 240, 240)
           content = new BorderPane {
+            prefHeight <== scene.height
+            prefWidth <== scene.width
+            style = "-fx-font: normal bold 10pt sans-serif"
+            padding = Insets(50, 80, 50, 80)
             center = new VBox {
-              padding = Insets(50, 80, 50, 80)
-              style = "-fx-font: normal bold 10pt sans-serif"
               children = Seq(
                 new VBox {
                   children = Seq(
                     new HBox {
+                      alignment = Pos.Center
                       val slider = new Slider(0, 0, 0) {
                         disable <== loading
                         valueChanging.addListener({
@@ -223,7 +232,7 @@ object ControlPanel {
                       )
                     },
                     new HBox(10) {
-                      alignment = scalafx.geometry.Pos.Center
+                      alignment = Pos.Center
                       children = Seq(
                         new Button {
                           text <== Bindings.createStringBinding(
@@ -324,8 +333,13 @@ object ControlPanel {
                   )
                 },
                 new Pane {
+                  vgrow = Priority.Always
+                  hgrow = Priority.Always
                   diffNodeProperty.onChange { (_, _, _) =>
-                    children = Seq(diffNodeProperty.value)
+                    val node = diffNodeProperty.value;
+                    node.prefHeight <== height
+                    node.prefWidth <== width
+                    children = Seq(node)
                   }
                 }
               )
@@ -337,10 +351,10 @@ object ControlPanel {
     });
   }
 
-  private def createDiffNode(build1: Build, build2: Build): Node = {
+  private def createDiffNode(sourceBuild: Build, targetBuild: Build): Region = {
     val deletedFiles =
-      build1.codes.keySet
-        .diff(build2.codes.keySet)
+      sourceBuild.codes.keySet
+        .diff(targetBuild.codes.keySet)
         .toList
         .sorted
         .map { filename =>
@@ -348,22 +362,28 @@ object ControlPanel {
             text = s"deleted: ${filename}"
           }
         };
-    val addedFiles =
-      build2.codes.keySet.diff(build1.codes.keySet).toList.sorted.map {
-        filename =>
+    val createdFiles =
+      targetBuild.codes.keySet
+        .diff(sourceBuild.codes.keySet)
+        .toList
+        .sorted
+        .map { filename =>
           new Text {
-            text = s"added: ${filename}"
+            text = s"created: ${filename}"
           }
-      }
+        }
 
     val changedFiles =
-      build1.codes.keySet.intersect(build2.codes.keySet).toList.sorted.flatMap {
-        file =>
-          val code1 = build1.codes(file);
-          val code2 = build2.codes(file);
+      sourceBuild.codes.keySet
+        .intersect(targetBuild.codes.keySet)
+        .toList
+        .sorted
+        .flatMap { file =>
+          val sourceCode = sourceBuild.codes(file);
+          val targetCode = targetBuild.codes(file);
           val diff = DiffUtils.diff(
-            code1.lines.map(_.line).asJava,
-            code2.lines.map(_.line).asJava
+            sourceCode.lines.map(_.line).asJava,
+            targetCode.lines.map(_.line).asJava
           );
           val deltas = diff.getDeltas().asScala.toList;
           if (deltas.isEmpty) {
@@ -375,68 +395,225 @@ object ControlPanel {
                   text = s"changed: ${file}"
                 },
                 new GridPane {
+                  enum ChangeType(
+                      val backgroundColor: String,
+                      val marker: String
+                  ) {
+                    case Added extends ChangeType("#ccffcc", "+");
+                    case Removed extends ChangeType("#ffcccc", "-");
+                    case Unchanged extends ChangeType("#ffffff", "");
+                  }
+
+                  val sourceColOffset = 0;
+                  val targetColOffset = 3;
+
+                  def addCode(
+                      colOffset: Int,
+                      line: BuildCodeLine,
+                      rowIndex: Int,
+                      changeType: ChangeType
+                  ) = {
+                    add(
+                      new Pane {
+                        children = Seq(
+                          new TextFlow {
+                            children = Seq(new Text {
+                              text = (line.number + 1).toString()
+                            })
+                          }
+                        )
+                        style =
+                          s"-fx-background-color: ${changeType.backgroundColor}"
+                      },
+                      colOffset,
+                      rowIndex
+                    )
+                    add(
+                      new Pane {
+                        children = Seq(new TextFlow {
+                          children = Seq(new Text {
+                            text = changeType.marker
+                          })
+                        })
+                        style =
+                          s"-fx-background-color: ${changeType.backgroundColor}"
+                      },
+                      colOffset + 1,
+                      rowIndex
+                    )
+                    add(
+                      new Pane {
+                        children = Seq(new TextFlow {
+                          children = line.tokens.map(token =>
+                            new Text {
+                              text = token.token
+                              fill = Color.rgb(
+                                token.color.getRed(),
+                                token.color.getGreen(),
+                                token.color.getBlue()
+                              )
+                            }
+                          )
+                        })
+                        style =
+                          s"-fx-background-color: ${changeType.backgroundColor}"
+                      },
+                      colOffset + 2,
+                      rowIndex
+                    )
+                  }
+
                   background = new Background(
                     Array(
                       new BackgroundFill(White, null, null)
                     )
                   )
                   columnConstraints ++= Seq(
+                    new ColumnConstraints(15),
+                    new ColumnConstraints(15),
                     new ColumnConstraints {
-                      percentWidth = 50
+                      hgrow = Priority.Always
                     },
+                    new ColumnConstraints(15),
+                    new ColumnConstraints(15),
                     new ColumnConstraints {
-                      percentWidth = 50
+                      hgrow = Priority.Always
                     }
                   )
-                  var offset = 0;
-                  deltas.foreach { delta =>
-                    delta.getSource().getLines().asScala.zipWithIndex.foreach {
-                      (line, i) =>
+                  val contextSize = 2;
+                  var rowOffset = 0;
+
+                  // これ+1はすでに表示済みなのでcontextとして表示してはいけない
+                  var usedSourceLine = 0;
+                  var usedTargetLine = 0;
+                  deltas
+                    .sortBy(_.getSource().getPosition())
+                    .foreach { delta =>
+                      val source = delta.getSource();
+                      val target = delta.getTarget();
+                      val sourceStart = source.getPosition();
+                      val targetStart = target.getPosition();
+                      val sourceEnd = sourceStart + source.size();
+                      val targetEnd = targetStart + target.size();
+
+                      val sourceContextSize =
+                        contextSize.min(sourceStart - usedSourceLine);
+                      val targetContextSize =
+                        contextSize.min(targetStart - usedTargetLine);
+                      val maxContextSize =
+                        sourceContextSize.max(targetContextSize);
+
+                      if (
+                        usedSourceLine < sourceStart - sourceContextSize || usedTargetLine < targetStart - targetContextSize
+                      ) {
                         add(
-                          new Pane {
-                            children = Seq(new TextFlow {
-                              children = Seq(new Text {
-                                text = line
-                              })
+                          new TextFlow {
+                            children = Seq(new Text {
+                              text = "..."
+                              fill = Gray
                             })
-                            style = "-fx-background-color: #ffcccc"
+
                           },
-                          0,
-                          offset + i
+                          sourceColOffset + 2,
+                          rowOffset
                         )
+                        rowOffset += 1;
+                      }
+
+                      (sourceStart - sourceContextSize until sourceEnd)
+                        .zip(
+                          Iterator.from(
+                            rowOffset + maxContextSize - sourceContextSize
+                          )
+                        )
+                        .foreach { (line, offset) =>
+                          addCode(
+                            sourceColOffset,
+                            sourceCode.lines(line),
+                            offset,
+                            if (line < sourceStart) {
+                              ChangeType.Unchanged
+                            } else {
+                              ChangeType.Removed
+                            }
+                          )
+                        }
+
+                      (targetStart - targetContextSize until targetEnd)
+                        .zip(
+                          Iterator.from(
+                            rowOffset + maxContextSize - targetContextSize
+                          )
+                        )
+                        .foreach { (line, offset) =>
+                          addCode(
+                            targetColOffset,
+                            targetCode.lines(line),
+                            offset,
+                            if (line < targetStart) {
+                              ChangeType.Unchanged
+                            } else {
+                              ChangeType.Added
+                            }
+                          )
+                        }
+
+                      rowOffset += maxContextSize + target
+                        .size()
+                        .max(source.size());
+                      usedSourceLine = sourceEnd;
+                      usedTargetLine = targetEnd;
                     }
 
-                    delta.getTarget().getLines().asScala.zipWithIndex.map {
-                      (line, i) =>
-                        add(
-                          new Pane {
-                            children = Seq(new TextFlow {
-                              children = Seq(new Text {
-                                text = line
-                              })
-                            })
-                            style = "-fx-background-color: #ccffcc"
-                          },
-                          1,
-                          offset + i
+                  for (
+                    (line, offset) <-
+                      (usedSourceLine until sourceCode.lines.size)
+                        .take(contextSize)
+                        .zip(
+                          Iterator.from(rowOffset)
                         )
-                    }
-
-                    offset += delta
-                      .getSource()
-                      .size()
-                      .max(
-                        delta.getTarget().size()
-                      );
+                  ) {
+                    addCode(
+                      sourceColOffset,
+                      sourceCode.lines(line),
+                      offset,
+                      ChangeType.Unchanged
+                    )
                   }
+
+                  for (
+                    (line, offset) <-
+                      (usedTargetLine until targetCode.lines.size)
+                        .take(contextSize)
+                        .zip(
+                          Iterator.from(rowOffset)
+                        )
+                  ) {
+                    addCode(
+                      targetColOffset,
+                      targetCode.lines(line),
+                      offset,
+                      ChangeType.Unchanged
+                    )
+                  }
+
                 }
               )
             })
           }
-      }
+        }
 
-    new VBox {
-      children = deletedFiles ++ addedFiles ++ changedFiles
+    if (deletedFiles.isEmpty && createdFiles.isEmpty && changedFiles.isEmpty) {
+      new VBox()
+    } else {
+      new ScrollPane {
+        val sp = this
+        hbarPolicy = ScrollPane.ScrollBarPolicy.Never
+        content = new VBox {
+          prefWidth <== sp.width
+          children = deletedFiles ++ createdFiles ++ changedFiles
+        }
+      }
     }
   }
 }

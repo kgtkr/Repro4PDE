@@ -117,7 +117,7 @@ class EditorManager(val editor: JavaEditor) {
                     BuildCodeToken(tokenStr, color)
                   }
                   .toList
-                BuildCodeLine(line, tokens)
+                BuildCodeLine(i, line, tokens)
               }.toList;
 
             val name = code.getFileName();
