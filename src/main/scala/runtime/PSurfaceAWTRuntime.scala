@@ -141,7 +141,7 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
             }
 
           if (addSleepTime > 0) {
-            Logger.log("addSleepTime: " + addSleepTime / 1000000.0 + "ms");
+            println("addSleepTime: " + addSleepTime / 1000000.0 + "ms");
           }
 
           val afterTime = System.nanoTime();

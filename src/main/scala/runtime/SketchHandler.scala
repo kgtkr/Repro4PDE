@@ -41,7 +41,7 @@ class SketchHandler(
       }
       val endTime = System.nanoTime();
       val ms = (endTime - this.startTime) / 1000000.0;
-      Logger.log(
+      println(
         "onTarget: " + ms + "ms, " +
           "targetFrameCount: " + this.targetFrameCount + ", " +
           "frameRate: " + this.targetFrameCount / ms * 1000

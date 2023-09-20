@@ -7,6 +7,7 @@ import net.kgtkr.seekprog.ControlPanel
 
 object SeekprogTool {
   var toolName: String = null
+  var isDebug = false
 }
 
 class SeekprogTool(toolName: String) extends Tool {
@@ -17,6 +18,7 @@ class SeekprogTool(toolName: String) extends Tool {
   override def init(base: Base) = {
     this.base = base
     SeekprogTool.toolName = toolName
+    SeekprogTool.isDebug = toolName == "SeekprogDev"
     ControlPanel.init()
   }
 
