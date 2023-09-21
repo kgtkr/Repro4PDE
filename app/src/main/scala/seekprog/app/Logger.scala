@@ -2,7 +2,7 @@ package seekprog.app;
 
 object Logger {
   def log(message: String): Unit = {
-    if (SeekprogTool.isDebug) {
+    if (App.isDebug) {
       println(s"INFO: $message")
     }
   }
