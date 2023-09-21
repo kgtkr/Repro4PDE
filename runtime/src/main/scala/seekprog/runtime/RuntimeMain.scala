@@ -117,5 +117,3 @@ object RuntimeMain {
     }
   }
 }
-
-class RuntimeMain {}

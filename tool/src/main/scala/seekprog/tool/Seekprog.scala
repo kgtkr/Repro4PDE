@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
 import scala.util.chaining._
+import java.lang.reflect.Method
 
 object Seekprog {
   def filterCpUrls(urls: Array[URL]) = {
@@ -56,7 +57,7 @@ object Seekprog {
 }
 
 class Seekprog() extends Tool {
-  var tool: Tool = null
+  var runMethod: Method = null
 
   override def getMenuTitle() = {
     "Seekprog"
@@ -88,19 +89,23 @@ class Seekprog() extends Tool {
       .map(name => libDir.resolve(name.trim()).toUri().toURL())
       .pipe(Seekprog.filterCpUrls)
 
-    this.tool = URLClassLoader
+    val appClass = URLClassLoader
       .newInstance(
         cp,
         javaModeLoader
       )
       .loadClass("seekprog.app.SeekprogApp")
-      .getConstructor(classOf[String])
-      .newInstance(toolName)
-      .asInstanceOf[Tool]
-    this.tool.init(base)
+    this.runMethod = appClass.getMethod("run");
+    appClass
+      .getMethod(
+        "init",
+        classOf[String],
+        classOf[Base]
+      )
+      .invoke(null, toolName, base);
   }
 
   override def run() = {
-    this.tool.run()
+    this.runMethod.invoke(null);
   }
 }
