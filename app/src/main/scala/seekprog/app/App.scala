@@ -1,6 +1,5 @@
 package seekprog.app;
 
-import processing.app.tools.Tool
 import processing.app.Base
 import processing.mode.java.JavaEditor
 

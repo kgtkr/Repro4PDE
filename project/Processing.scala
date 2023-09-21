@@ -56,12 +56,22 @@ object Processing {
     processingOutPath / s"processing-${version}"
   }
 
-  lazy val processingCpTask = Def.task[Seq[File]] {
-    val processingDir = downloadProcessingTask.value;
+  lazy val javaModeCpTask = Def.task[Seq[File]] {
+    (downloadProcessingTask.value / "modes" / "java" / "mode" ** "*.jar").get
+  }
 
-    (processingDir / "lib" ** "*.jar").get ++
-      (processingDir / "core" / "library" ** "*.jar").get ++
-      (processingDir / "modes" / "java" / "mode" ** "*.jar").get
+  lazy val coreCpTask = Def.task[Seq[File]] {
+    (downloadProcessingTask.value / "core" / "library" ** "*.jar").get
+  }
+
+  lazy val libCpTask = Def.task[Seq[File]] {
+    (downloadProcessingTask.value / "lib" ** "*.jar").get
+  }
+
+  lazy val allCpTask = Def.task[Seq[File]] {
+    libCpTask.value ++
+      coreCpTask.value ++
+      javaModeCpTask.value
   }
 
 }

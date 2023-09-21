@@ -19,11 +19,10 @@ val circeDependencies = Seq(
 lazy val sharedSettings = Seq(
   scalaVersion := "3.3.1",
   version := "0.1.0-SNAPSHOT",
-  Compile / unmanagedJars ++= Processing.processingCpTask.value,
   filteredfullClasspathAsJars := {
     val files = (Runtime / fullClasspathAsJars).value
     val exclude =
-      Processing.processingCpTask.value.map(_.getPath()).toSet
+      Processing.allCpTask.value.map(_.getPath()).toSet
     files
       .filterNot(jar => exclude.contains(jar.data.getPath()))
       .filterNot(jar => jar.data.getName().contains("javafx-web"))
@@ -54,7 +53,8 @@ lazy val codegenProject = project
         s.log
       ).failed foreach (sys error _.getMessage)
       (rootDir ** "*.scala").get
-    }
+    },
+    Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
 lazy val sharedProject = project
@@ -79,7 +79,8 @@ lazy val runtimeProject = project
   .settings(
     name := "seekprog-runtime",
     libraryDependencies ++= circeDependencies,
-    Compile / sourceGenerators += codegenProject / codegenSeekprog
+    Compile / sourceGenerators += codegenProject / codegenSeekprog,
+    Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
 lazy val toolProject = project
@@ -88,8 +89,9 @@ lazy val toolProject = project
   .settings(
     name := "seekprog-tool",
     assembly / assemblyExcludedJars := Attributed.blankSeq(
-      Processing.processingCpTask.value
-    )
+      Processing.allCpTask.value
+    ),
+    Compile / unmanagedJars ++= Processing.libCpTask.value
   );
 
 lazy val appProject = project
@@ -121,7 +123,9 @@ lazy val appProject = project
         "mac",
         "win"
       ).foldLeft("org.openjfx" % artifact % "20")(_ classifier _),
-    )
+    ),
+    Compile / unmanagedJars ++= Processing.javaModeCpTask.value,
+    Compile / unmanagedJars ++= Processing.libCpTask.value
   );
 
 lazy val buildToolBase = Def.task {
@@ -187,7 +191,6 @@ lazy val root = project
     toolProject,
     appProject
   )
-  .settings(sharedSettings)
   .settings(
     name := "seekprog",
     buildTool := {
