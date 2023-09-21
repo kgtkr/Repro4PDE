@@ -1,3 +1,5 @@
+import java.io.FileInputStream
+import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 
@@ -218,7 +220,13 @@ lazy val root = project
       val dir = buildToolBase.value;
 
       val properties = new Properties();
-      IO.load(properties, baseDirectory.value / "dev.properties")
+      properties
+        .load(
+          new InputStreamReader(
+            new FileInputStream(baseDirectory.value / "dev.properties"),
+            StandardCharsets.UTF_8
+          )
+        )
       val toolsDir = new File(properties.getProperty("PROCESSING_TOOLS_DIR"));
 
       val toolDir = toolsDir / "SeekprogDev";
