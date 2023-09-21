@@ -93,7 +93,7 @@ class Seekprog() extends Tool {
         cp,
         javaModeLoader
       )
-      .loadClass("seekprog.app.App")
+      .loadClass("seekprog.app.SeekprogApp")
       .getConstructor(classOf[String])
       .newInstance(toolName)
       .asInstanceOf[Tool]

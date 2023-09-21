@@ -116,7 +116,7 @@ class VmManager(
       .toPath()
       .resolve(
         Path.of(
-          App.toolName,
+          SeekprogApp.toolName,
           "tool",
           "lib"
         )
@@ -299,7 +299,7 @@ class VmManager(
                             ),
                             vm.mirrorOf(!running),
                             vm.mirrorOf(slaveMode),
-                            vm.mirrorOf(App.isDebug)
+                            vm.mirrorOf(SeekprogApp.isDebug)
                           ),
                           0
                         );

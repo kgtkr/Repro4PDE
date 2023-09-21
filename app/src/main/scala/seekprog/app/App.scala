@@ -4,20 +4,20 @@ import processing.app.tools.Tool
 import processing.app.Base
 import processing.mode.java.JavaEditor
 
-object App {
+object SeekprogApp {
   var toolName: String = null
   var isDebug = false
 }
 
-class App(toolName: String) extends Tool {
+class SeekprogApp(toolName: String) extends Tool {
   var base: Base = null
 
   override def getMenuTitle() = ???
 
   override def init(base: Base) = {
     this.base = base
-    App.toolName = toolName
-    App.isDebug = toolName == "SeekprogDev"
+    SeekprogApp.toolName = toolName
+    SeekprogApp.isDebug = toolName == "SeekprogDev"
     ControlPanel.init()
   }
 
