@@ -193,6 +193,7 @@ lazy val root = project
     toolProject,
     appProject
   )
+  .settings(sharedSettings)
   .settings(
     name := "seekprog",
     buildTool := {
