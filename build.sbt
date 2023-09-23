@@ -7,8 +7,6 @@ lazy val deployToolDev =
   taskKey[Unit]("Build as processing tool and deploy for development")
 lazy val buildTool =
   taskKey[File]("Build as processing tool")
-lazy val codegenSeekprog =
-  taskKey[Seq[File]]("Seekprog codegen")
 lazy val filteredfullClasspathAsJars =
   taskKey[Classpath]("filteredfullClasspathAsJars")
 
@@ -42,20 +40,6 @@ lazy val codegenProject = project
   .settings(sharedSettings)
   .settings(
     name := "seekprog-codegen",
-    codegenSeekprog := {
-      val rootDir = sourceManaged.value / "seekprog"
-      IO.delete(rootDir)
-      val cp = (Compile / fullClasspath).value
-      val r = (Compile / runner).value
-      val s = streams.value
-      r.run(
-        "seekprog.codegen.Codegen",
-        cp.files,
-        Array(rootDir.getAbsolutePath()),
-        s.log
-      ).failed foreach (sys error _.getMessage)
-      (rootDir ** "*.scala").get
-    },
     Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
@@ -81,7 +65,20 @@ lazy val runtimeProject = project
   .settings(
     name := "seekprog-runtime",
     libraryDependencies ++= circeDependencies,
-    Compile / sourceGenerators += codegenProject / codegenSeekprog,
+    Compile / sourceGenerators += Def.task {
+      val rootDir = sourceManaged.value / "seekprog"
+      IO.delete(rootDir)
+      val cp = (codegenProject / Runtime / fullClasspath).value
+      val r = (Compile / runner).value
+      val s = streams.value
+      r.run(
+        "seekprog.codegen.Codegen",
+        cp.files,
+        Array(rootDir.getAbsolutePath()),
+        s.log
+      ).failed foreach (sys error _.getMessage)
+      (rootDir ** "*.scala").get
+    },
     Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
