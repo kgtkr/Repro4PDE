@@ -7,6 +7,7 @@ import java.io.FileInputStream
 import java.io.InputStreamReader
 
 class ProcessingTool(
+    allProjects: Seq[Project],
     toolProject: Project,
     appProject: Project,
     runtimeProject: Project
@@ -77,26 +78,39 @@ class ProcessingTool(
     distDir
   };
 
-  lazy val buildToolTask = Def.task {
+  lazy val buildToolTask = Def.taskDyn {
     val dir = buildToolBaseTask.value;
-    val srcDir = (Compile / sourceDirectory).value;
-    val docDir = (Compile / doc).value;
     val dist = crossTarget.value / "Seekprog.zip";
+    val nameSrcDocs = flattenTasks(
+      allProjects
+        .map(p =>
+          Def.task {
+            val pName = (p / name).value
+            val srcDir = (p / Compile / sourceDirectory).value
+            val docDir = (p / Compile / doc).value;
 
-    IO.copyDirectory(
-      srcDir,
-      dir / "src"
-    )
+            (pName, srcDir, docDir)
+          }
+        )
+    ).value
+
+    for ((pName, srcDir, docDir) <- nameSrcDocs) {
+      IO.copyDirectory(
+        srcDir,
+        dir / "src" / pName
+      )
+
+      IO.copyDirectory(
+        docDir,
+        dir / "reference" / pName
+      )
+    }
 
     (dir / "examples").mkdir()
-    IO.copyDirectory(
-      docDir,
-      dir / "reference"
-    )
 
     IO.zip(Path.allSubpaths(dir.getParentFile()), dist, None)
 
-    dist
+    Def.task { dist }
   };
 
   lazy val deployToolDevTask = Def.task {
@@ -135,4 +149,14 @@ class ProcessingTool(
       toolDir / "tool" / "SeekprogDev.jar"
     )
   };
+
+  // https://stackoverflow.com/questions/61055562/evaluating-a-list-of-tasks-inside-of-an-sbt-task
+  def flattenTasks[A](
+      tasks: Seq[Def.Initialize[Task[A]]]
+  ): Def.Initialize[Task[List[A]]] =
+    tasks.toList match {
+      case Nil     => Def.task { Nil }
+      case x :: xs => Def.taskDyn { flattenTasks(xs) map (x.value :: _) }
+    }
+
 }

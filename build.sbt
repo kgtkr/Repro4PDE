@@ -4,6 +4,7 @@ lazy val buildTool =
   taskKey[File]("Build as processing tool")
 
 lazy val processingTool = new ProcessingTool(
+  allProjects,
   toolProject,
   appProject,
   runtimeProject
@@ -118,15 +119,19 @@ lazy val appProject = project
     Compile / unmanagedJars ++= Processing.libCpTask.value
   );
 
+lazy val allProjects = Seq(
+  codegenProject,
+  sharedProject,
+  utilsProject,
+  runtimeProject,
+  toolProject,
+  appProject
+);
+
 lazy val root = project
   .in(file("."))
   .aggregate(
-    codegenProject,
-    sharedProject,
-    utilsProject,
-    runtimeProject,
-    toolProject,
-    appProject
+    allProjects.map(p => p: ProjectReference): _*
   )
   .settings(sharedSettings)
   .settings(
