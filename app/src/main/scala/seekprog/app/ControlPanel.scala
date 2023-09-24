@@ -40,6 +40,7 @@ import scalafx.scene.control.ScrollPane
 import scalafx.geometry.Pos
 import scalafx.scene.layout.Priority
 import scalafx.scene.layout.Region
+import scala.collection.mutable.Map as MMap
 
 enum PlayerState {
   case Playing;
@@ -48,306 +49,342 @@ enum PlayerState {
 }
 
 object ControlPanel {
+  val instances = MMap[JavaEditor, Stage]();
+
   def init() = {
     Platform.implicitExit = false;
     Platform.startup(() => {});
   }
 
   def show(editor: JavaEditor) = {
-    val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
-    val loading = BooleanProperty(false);
-    val editorManager = new EditorManager(editor)
-    editorManager.start()
-    val playerState = ObjectProperty(PlayerState.Stopped);
-    val currentBuildProperty = ObjectProperty[Option[Build]](None);
-    val slaveBuildProperty = ObjectProperty[Option[Build]](None);
-    val diffNodeProperty = ObjectProperty[Region](new VBox());
+    val mStage = instances.synchronized {
+      instances.get(editor)
+    };
 
-    def updateDiffNodeProperty() = {
-      (slaveBuildProperty.value, currentBuildProperty.value) match {
-        case (Some(slaveBuild), Some(currentBuild)) => {
-          diffNodeProperty.value = createDiffNode(slaveBuild, currentBuild)
-        }
-        case _ => {
-          diffNodeProperty.value = new VBox()
+    mStage match {
+      case Some(stage) => {
+        Platform.runLater {
+          stage.requestFocus()
         }
       }
-    }
+      case None => {
+        val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
+        val loading = BooleanProperty(false);
+        val editorManager = new EditorManager(editor)
+        editorManager.start()
+        val playerState = ObjectProperty(PlayerState.Stopped);
+        val currentBuildProperty = ObjectProperty[Option[Build]](None);
+        val slaveBuildProperty = ObjectProperty[Option[Build]](None);
+        val diffNodeProperty = ObjectProperty[Region](new VBox());
 
-    currentBuildProperty.onChange { (_, _, _) =>
-      updateDiffNodeProperty()
-    }
-
-    slaveBuildProperty.onChange { (_, _, _) =>
-      updateDiffNodeProperty()
-    }
-
-    def donePromise(onSuccess: => Unit = {}) = {
-      import scala.concurrent.ExecutionContext.Implicits.global
-
-      val promise = Promise[Unit]();
-      promise.future.onComplete(result => {
-        Platform.runLater {
-          loading.value = false
-        }
-
-        result match {
-          case Success(_) => {
-            onSuccess
-          }
-          case Failure(e) => {
-            Logger.err(e);
+        def updateDiffNodeProperty() = {
+          (slaveBuildProperty.value, currentBuildProperty.value) match {
+            case (Some(slaveBuild), Some(currentBuild)) => {
+              diffNodeProperty.value = createDiffNode(slaveBuild, currentBuild)
+            }
+            case _ => {
+              diffNodeProperty.value = new VBox()
+            }
           }
         }
-      })
-      promise
-    }
 
-    val fileWatchThread =
-      new Thread(() => {
-        val watcher = FileSystems.getDefault().newWatchService();
-        val path = Paths.get(sketchPath);
-        path.register(
-          watcher,
-          Array[WatchEvent.Kind[?]](
-            StandardWatchEventKinds.ENTRY_CREATE,
-            StandardWatchEventKinds.ENTRY_DELETE,
-            StandardWatchEventKinds.ENTRY_MODIFY
-          ),
-          SensitivityWatchEventModifier.HIGH
-        );
+        currentBuildProperty.onChange { (_, _, _) =>
+          updateDiffNodeProperty()
+        }
 
-        for (
-          watchKey <- Iterator
-            .continually({
-              try {
-                Some(watcher.take())
-              } catch {
-                case e: InterruptedException => {
-                  None
-                }
+        slaveBuildProperty.onChange { (_, _, _) =>
+          updateDiffNodeProperty()
+        }
+
+        def donePromise(onSuccess: => Unit = {}) = {
+          import scala.concurrent.ExecutionContext.Implicits.global
+
+          val promise = Promise[Unit]();
+          promise.future.onComplete(result => {
+            Platform.runLater {
+              loading.value = false
+            }
+
+            result match {
+              case Success(_) => {
+                onSuccess
               }
-            })
-            .mapWhile(identity)
-        ) {
-          for (event <- watchKey.pollEvents().asScala) {
-            event.context() match {
-              case filename: Path => {
-                if (filename.toString().endsWith(".pde")) {
-                  Platform.runLater {
-                    if (!loading.value) {
-                      loading.value = true
-                      editorManager.send(
-                        EditorManager.Cmd.ReloadSketch(donePromise())
-                      )
+              case Failure(e) => {
+                Logger.err(e);
+              }
+            }
+          })
+          promise
+        }
+
+        val fileWatchThread =
+          new Thread(() => {
+            val watcher = FileSystems.getDefault().newWatchService();
+            val path = Paths.get(sketchPath);
+            path.register(
+              watcher,
+              Array[WatchEvent.Kind[?]](
+                StandardWatchEventKinds.ENTRY_CREATE,
+                StandardWatchEventKinds.ENTRY_DELETE,
+                StandardWatchEventKinds.ENTRY_MODIFY
+              ),
+              SensitivityWatchEventModifier.HIGH
+            );
+
+            for (
+              watchKey <- Iterator
+                .continually({
+                  try {
+                    Some(watcher.take())
+                  } catch {
+                    case e: InterruptedException => {
+                      None
                     }
+                  }
+                })
+                .mapWhile(identity)
+            ) {
+              for (event <- watchKey.pollEvents().asScala) {
+                event.context() match {
+                  case filename: Path => {
+                    if (filename.toString().endsWith(".pde")) {
+                      Platform.runLater {
+                        if (!loading.value) {
+                          loading.value = true
+                          editorManager.send(
+                            EditorManager.Cmd.ReloadSketch(donePromise())
+                          )
+                        }
+                      }
+                    }
+                  }
+                  case evt => {
+                    Logger.log(s"unknown event: ${evt}")
                   }
                 }
               }
-              case evt => {
-                Logger.log(s"unknown event: ${evt}")
+
+              if (!watchKey.reset()) {
+                throw new RuntimeException("watchKey reset failed")
               }
             }
-          }
+          });
+        fileWatchThread.start();
 
-          if (!watchKey.reset()) {
-            throw new RuntimeException("watchKey reset failed")
-          }
-        }
-      });
-    fileWatchThread.start();
+        Platform.runLater(() => {
 
-    Platform.runLater(() => {
-
-      val stage = new Stage {
-        title = "Seekprog"
-        onCloseRequest = _ => {
-          loading.value = true
-          editorManager.send(
-            EditorManager.Cmd.Exit(donePromise())
-          );
-          fileWatchThread.interrupt();
-        }
-        scene = new Scene(600, 300) {
-          fill = Color.rgb(240, 240, 240)
-          content = new BorderPane {
-            prefHeight <== scene.height
-            prefWidth <== scene.width
-            style = "-fx-font: normal bold 10pt sans-serif"
-            padding = Insets(50, 80, 50, 80)
-            center = new VBox {
-              children = Seq(
-                new VBox {
+          val stage = new Stage {
+            title = "Seekprog"
+            onCloseRequest = _ => {
+              loading.value = true
+              editorManager.send(
+                EditorManager.Cmd.Exit(donePromise())
+              );
+              fileWatchThread.interrupt();
+              instances.synchronized {
+                instances.remove(editor)
+              }
+            }
+            scene = new Scene(600, 300) {
+              fill = Color.rgb(240, 240, 240)
+              content = new BorderPane {
+                prefHeight <== scene.height
+                prefWidth <== scene.width
+                style = "-fx-font: normal bold 10pt sans-serif"
+                padding = Insets(50, 80, 50, 80)
+                center = new VBox {
                   children = Seq(
-                    new HBox {
-                      alignment = Pos.Center
-                      val slider = new Slider(0, 0, 0) {
-                        disable <== loading
-                        valueChanging.addListener({
-                          (_, oldChanging, changing) =>
-                            if (oldChanging && !changing && !loading.value) {
-                              loading.value = true
-                              editorManager.send(
-                                EditorManager.Cmd.UpdateLocation(
-                                  (value.value * 60).toInt,
-                                  donePromise()
-                                )
-                              );
-                            }
-                            ()
-                        })
-                      };
-                      editorManager.listen { event =>
-                        Platform.runLater {
-                          event match {
-                            case EditorManager.Event
-                                  .UpdateLocation(value2, max2) => {
-                              slider.max = max2.toDouble / 60
-                              if (!slider.valueChanging.value) {
-                                slider.value = value2.toDouble / 60
+                    new VBox {
+                      children = Seq(
+                        new HBox {
+                          alignment = Pos.Center
+                          val slider = new Slider(0, 0, 0) {
+                            disable <== loading
+                            valueChanging.addListener({
+                              (_, oldChanging, changing) =>
+                                if (
+                                  oldChanging && !changing && !loading.value
+                                ) {
+                                  loading.value = true
+                                  editorManager.send(
+                                    EditorManager.Cmd.UpdateLocation(
+                                      (value.value * 60).toInt,
+                                      donePromise()
+                                    )
+                                  );
+                                }
+                                ()
+                            })
+                          };
+                          editorManager.listen { event =>
+                            Platform.runLater {
+                              event match {
+                                case EditorManager.Event
+                                      .UpdateLocation(value2, max2) => {
+                                  slider.max = max2.toDouble / 60
+                                  if (!slider.valueChanging.value) {
+                                    slider.value = value2.toDouble / 60
+                                  }
+                                }
+                                case EditorManager.Event.Stopped() => {
+                                  playerState.value = PlayerState.Stopped
+                                }
+                                case EditorManager.Event
+                                      .CreatedBuild(build) => {
+                                  currentBuildProperty.value = Some(build)
+                                }
                               }
                             }
-                            case EditorManager.Event.Stopped() => {
-                              playerState.value = PlayerState.Stopped
-                            }
-                            case EditorManager.Event.CreatedBuild(build) => {
-                              currentBuildProperty.value = Some(build)
-                            }
-                          }
-                        }
-                      };
+                          };
 
-                      children = Seq(
-                        slider,
-                        new Text {
-                          text <== Bindings.createStringBinding(
-                            () =>
-                              f"${slider.value.intValue()}%d${Locale.locale.secound}/ ${slider.max
-                                  .intValue()}%d${Locale.locale.secound}",
-                            slider.value,
-                            slider.max
-                          )
-                        }
-                      )
-                    },
-                    new HBox(10) {
-                      alignment = Pos.Center
-                      children = Seq(
-                        new Button {
-                          text <== Bindings.createStringBinding(
-                            () =>
-                              if (playerState.value == PlayerState.Playing) {
-                                "⏸"
-                              } else {
-                                "▶"
-                              },
-                            playerState
-                          )
-                          disable <== loading
-                          onAction = _ => {
-                            playerState.value match {
-                              case PlayerState.Playing => {
-                                loading.value = true
-                                editorManager.send(
-                                  EditorManager.Cmd.PauseSketch(donePromise {
-                                    Platform.runLater {
-                                      playerState.value = PlayerState.Paused;
-                                    }
-                                  })
-                                )
-                              }
-                              case PlayerState.Paused => {
-                                loading.value = true
-                                editorManager.send(
-                                  EditorManager.Cmd.ResumeSketch(donePromise {
-                                    Platform.runLater {
-                                      playerState.value = PlayerState.Playing;
-                                    }
-                                  })
-                                )
-                              }
-                              case PlayerState.Stopped => {
-                                loading.value = true
-                                editorManager.send(
-                                  EditorManager.Cmd.StartSketch(donePromise {
-                                    Platform.runLater {
-                                      playerState.value = PlayerState.Playing;
-                                    }
-                                  })
-                                )
-                              }
+                          children = Seq(
+                            slider,
+                            new Text {
+                              text <== Bindings.createStringBinding(
+                                () =>
+                                  f"${slider.value.intValue()}%d${Locale.locale.secound}/ ${slider.max
+                                      .intValue()}%d${Locale.locale.secound}",
+                                slider.value,
+                                slider.max
+                              )
                             }
-                          }
-                        },
-                        new Button {
-                          text <== Bindings.createStringBinding(
-                            () =>
-                              if (slaveBuildProperty.value.isDefined) {
-                                Locale.locale.disableComparison
-                              } else {
-                                Locale.locale.enableComparison
-                              },
-                            slaveBuildProperty
                           )
-                          disable <==
-                            Bindings.createBooleanBinding(
-                              () =>
-                                loading.value || currentBuildProperty.value.isEmpty,
-                              loading,
-                              currentBuildProperty
-                            )
-                          onAction = _ => {
-                            currentBuildProperty.value match {
-                              case Some(currentBuild) if !loading.value => {
-                                slaveBuildProperty.value match {
-                                  case Some(slaveBuild) => {
+                        },
+                        new HBox(10) {
+                          alignment = Pos.Center
+                          children = Seq(
+                            new Button {
+                              text <== Bindings.createStringBinding(
+                                () =>
+                                  if (
+                                    playerState.value == PlayerState.Playing
+                                  ) {
+                                    "⏸"
+                                  } else {
+                                    "▶"
+                                  },
+                                playerState
+                              )
+                              disable <== loading
+                              onAction = _ => {
+                                playerState.value match {
+                                  case PlayerState.Playing => {
                                     loading.value = true
-                                    slaveBuildProperty.value = None
                                     editorManager.send(
-                                      EditorManager.Cmd.RemoveSlave(
-                                        slaveBuild.id,
-                                        donePromise()
+                                      EditorManager.Cmd.PauseSketch(
+                                        donePromise {
+                                          Platform.runLater {
+                                            playerState.value =
+                                              PlayerState.Paused;
+                                          }
+                                        }
                                       )
                                     )
                                   }
-                                  case None => {
+                                  case PlayerState.Paused => {
                                     loading.value = true
-                                    slaveBuildProperty.value =
-                                      Some(currentBuild)
                                     editorManager.send(
-                                      EditorManager.Cmd.AddSlave(
-                                        currentBuild.id,
-                                        donePromise()
+                                      EditorManager.Cmd.ResumeSketch(
+                                        donePromise {
+                                          Platform.runLater {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
+                                        }
+                                      )
+                                    )
+                                  }
+                                  case PlayerState.Stopped => {
+                                    loading.value = true
+                                    editorManager.send(
+                                      EditorManager.Cmd.StartSketch(
+                                        donePromise {
+                                          Platform.runLater {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
+                                        }
                                       )
                                     )
                                   }
                                 }
                               }
-                              case _ => {}
+                            },
+                            new Button {
+                              text <== Bindings.createStringBinding(
+                                () =>
+                                  if (slaveBuildProperty.value.isDefined) {
+                                    Locale.locale.disableComparison
+                                  } else {
+                                    Locale.locale.enableComparison
+                                  },
+                                slaveBuildProperty
+                              )
+                              disable <==
+                                Bindings.createBooleanBinding(
+                                  () =>
+                                    loading.value || currentBuildProperty.value.isEmpty,
+                                  loading,
+                                  currentBuildProperty
+                                )
+                              onAction = _ => {
+                                currentBuildProperty.value match {
+                                  case Some(currentBuild) if !loading.value => {
+                                    slaveBuildProperty.value match {
+                                      case Some(slaveBuild) => {
+                                        loading.value = true
+                                        slaveBuildProperty.value = None
+                                        editorManager.send(
+                                          EditorManager.Cmd.RemoveSlave(
+                                            slaveBuild.id,
+                                            donePromise()
+                                          )
+                                        )
+                                      }
+                                      case None => {
+                                        loading.value = true
+                                        slaveBuildProperty.value =
+                                          Some(currentBuild)
+                                        editorManager.send(
+                                          EditorManager.Cmd.AddSlave(
+                                            currentBuild.id,
+                                            donePromise()
+                                          )
+                                        )
+                                      }
+                                    }
+                                  }
+                                  case _ => {}
+                                }
+                              }
                             }
-                          }
+                          )
                         }
                       )
+                    },
+                    new Pane {
+                      vgrow = Priority.Always
+                      hgrow = Priority.Always
+                      diffNodeProperty.onChange { (_, _, _) =>
+                        val node = diffNodeProperty.value;
+                        node.prefHeight <== height
+                        node.prefWidth <== width
+                        children = Seq(node)
+                      }
                     }
                   )
-                },
-                new Pane {
-                  vgrow = Priority.Always
-                  hgrow = Priority.Always
-                  diffNodeProperty.onChange { (_, _, _) =>
-                    val node = diffNodeProperty.value;
-                    node.prefHeight <== height
-                    node.prefWidth <== width
-                    children = Seq(node)
-                  }
                 }
-              )
+              }
             }
+          };
+          stage.show();
+          instances.synchronized {
+            instances(editor) = stage
           }
-        }
-      };
-      stage.show();
-    });
+        });
+      }
+    };
+
   }
 
   private def createDiffNode(sourceBuild: Build, targetBuild: Build): Region = {
