@@ -22,5 +22,6 @@ case class BuildCodeLine(
 
 case class BuildCodeToken(
     val token: String,
-    val color: Color
+    val color: Color,
+    val bold: Boolean
 )

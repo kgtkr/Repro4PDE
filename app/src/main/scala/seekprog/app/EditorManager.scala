@@ -111,11 +111,12 @@ class EditorManager(val editor: JavaEditor) {
                   .map { token =>
                     val style = Option(styles(token.id));
                     val color = style.map(_.getColor()).getOrElse(Color.BLACK)
+                    val bold = style.map(_.isBold()).getOrElse(false);
 
                     val tokenStr =
                       line.substring(offset, offset + token.length);
                     offset += token.length;
-                    BuildCodeToken(tokenStr, color)
+                    BuildCodeToken(tokenStr, color, bold)
                   }
                   .toList
                 BuildCodeLine(i, line, tokens)

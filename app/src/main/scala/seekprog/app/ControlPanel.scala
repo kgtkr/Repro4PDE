@@ -450,6 +450,9 @@ object ControlPanel {
                                 token.color.getGreen(),
                                 token.color.getBlue()
                               )
+                              if (token.bold) {
+                                style = "-fx-font-weight: bold"
+                              }
                             }
                           )
                         })
@@ -610,6 +613,7 @@ object ControlPanel {
         content = new VBox {
           prefWidth <== sp.width
           children = deletedFiles ++ createdFiles ++ changedFiles
+          style = "-fx-font: normal 10pt monospace"
         }
       }
     }
