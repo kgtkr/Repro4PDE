@@ -33,6 +33,8 @@ object EditorManager {
     case StartSketch(done: Promise[Unit])
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
+    // TODO: このコマンドを送るUI実装
+    case Stop(done: Promise[Unit])
     case Exit(done: Promise[Unit])
     case AddSlave(id: Int, done: Promise[Unit])
     case RemoveSlave(id: Int, done: Promise[Unit])
@@ -436,6 +438,22 @@ class EditorManager(val editor: JavaEditor) {
           }
           case None => {
             done.failure(new Exception("vm is not running"));
+          }
+        }
+      }
+      case Cmd.Stop(done) => {
+        oMasterVm match {
+          case None => {
+            done.failure(new Exception("vm is not running"));
+          }
+          case Some(_) => {
+            Await.ready(
+              done
+                .completeWith(exitVm())
+                .future,
+              Duration.Inf
+            )
+            running = false;
           }
         }
       }
