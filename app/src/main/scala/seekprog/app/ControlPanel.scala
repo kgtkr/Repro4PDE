@@ -110,6 +110,7 @@ object ControlPanel {
                 onSuccess
               }
               case Failure(e) => {
+                // TODO: エラーの種類によってはログに残さない(ビルドエラーなど)
                 Logger.err(e);
               }
             }

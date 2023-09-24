@@ -19,6 +19,7 @@ import javax.swing.text.Segment
 import processing.app.syntax.PdeTextAreaDefaults
 import processing.app.syntax.Token
 import java.awt.Color
+import processing.app.SketchException
 
 object EditorManager {
   enum Cmd {
@@ -82,65 +83,64 @@ class EditorManager(val editor: JavaEditor) {
   val styles = new PdeTextAreaDefaults().styles;
 
   private def updateBuild() = {
+    editor.statusEmpty();
+    editor.clearConsole();
+    val javaBuild = new JavaBuild(editor.getSketch());
     try {
-      editor.statusEmpty();
-      editor.clearConsole();
-      val javaBuild = new JavaBuild(editor.getSketch());
       javaBuild.build(true);
-      val codes = Map.from(
-        editor
-          .getSketch()
-          .getCode()
-          .map { code =>
-            val text = code.getProgram();
-            val state =
-              editor.getMode().getTokenMarker().createStateInstance();
-            val lineTexts = text.split("\\r?\\n")
-            state.insertLines(0, lineTexts.length)
-            val lines =
-              lineTexts.zipWithIndex.map { (line, i) =>
-                val token = state.markTokens(
-                  new Segment(line.toCharArray(), 0, line.length),
-                  i
-                );
-                var offset = 0;
-                val tokens = Iterator
-                  .iterate(token)(_.next)
-                  .takeWhile(_ != null)
-                  .takeWhile(_.id != Token.END)
-                  .map { token =>
-                    val style = Option(styles(token.id));
-                    val color = style.map(_.getColor()).getOrElse(Color.BLACK)
-                    val bold = style.map(_.isBold()).getOrElse(false);
-
-                    val tokenStr =
-                      line.substring(offset, offset + token.length);
-                    offset += token.length;
-                    BuildCodeToken(tokenStr, color, bold)
-                  }
-                  .toList
-                BuildCodeLine(i, line, tokens)
-              }.toList;
-
-            val name = code.getFileName();
-
-            (name, BuildCode(name, lines))
-          }
-      )
-
-      currentBuild = new Build(this.builds.length, javaBuild, codes);
-
-      this.builds += currentBuild;
-      this.eventListeners.foreach(
-        _(Event.CreatedBuild(currentBuild))
-      );
     } catch {
-      case e: Exception => {
-        Logger.err(e);
+      case e: SketchException => {
         editor.statusError(e);
         throw e;
       }
     }
+    val codes = Map.from(
+      editor
+        .getSketch()
+        .getCode()
+        .map { code =>
+          val text = code.getProgram();
+          val state =
+            editor.getMode().getTokenMarker().createStateInstance();
+          val lineTexts = text.split("\\r?\\n")
+          state.insertLines(0, lineTexts.length)
+          val lines =
+            lineTexts.zipWithIndex.map { (line, i) =>
+              val token = state.markTokens(
+                new Segment(line.toCharArray(), 0, line.length),
+                i
+              );
+              var offset = 0;
+              val tokens = Iterator
+                .iterate(token)(_.next)
+                .takeWhile(_ != null)
+                .takeWhile(_.id != Token.END)
+                .map { token =>
+                  val style = Option(styles(token.id));
+                  val color = style.map(_.getColor()).getOrElse(Color.BLACK)
+                  val bold = style.map(_.isBold()).getOrElse(false);
+
+                  val tokenStr =
+                    line.substring(offset, offset + token.length);
+                  offset += token.length;
+                  BuildCodeToken(tokenStr, color, bold)
+                }
+                .toList
+              BuildCodeLine(i, line, tokens)
+            }.toList;
+
+          val name = code.getFileName();
+
+          (name, BuildCode(name, lines))
+        }
+    )
+
+    currentBuild = new Build(this.builds.length, javaBuild, codes);
+
+    this.builds += currentBuild;
+    this.eventListeners.foreach(
+      _(Event.CreatedBuild(currentBuild))
+    );
   }
 
   private def updateSlaveVms() = {
@@ -294,6 +294,13 @@ class EditorManager(val editor: JavaEditor) {
 
   def start() = {
     new Thread(() => {
+      try {
+        updateBuild();
+      } catch {
+        case e: Exception => {
+          // ignore
+        }
+      }
       while (!isExit) {
         val task = taskQueue.take();
         task match {
@@ -311,31 +318,32 @@ class EditorManager(val editor: JavaEditor) {
     }).start();
   }
 
-  private def processCmd(cmd: Cmd) = {
+  private def processCmd(cmd: Cmd): Unit = {
     cmd match {
       case Cmd.ReloadSketch(done) => {
+        try {
+          this.updateBuild();
+        } catch {
+          case e: Exception => {
+            done.failure(e);
+            return;
+          }
+        }
+
         oMasterVm match {
           case Some(_) => {
-            try {
-              this.updateBuild();
-              Await.ready(
-                done
-                  .completeWith(for {
-                    _ <- exitVm()
-                    _ <- startVm()
-                  } yield ())
-                  .future,
-                Duration.Inf
-              )
-            } catch {
-              case e: Exception => {
-                done.failure(e);
-              }
-            }
-
+            Await.ready(
+              done
+                .completeWith(for {
+                  _ <- exitVm()
+                  _ <- startVm()
+                } yield ())
+                .future,
+              Duration.Inf
+            )
           }
           case None => {
-            done.failure(new Exception("vm is not running"));
+            done.success(())
           }
         }
       }
@@ -377,8 +385,8 @@ class EditorManager(val editor: JavaEditor) {
           }
           case None => {
             try {
-              running = true;
               this.updateBuild();
+              running = true;
               Await.ready(
                 done
                   .completeWith(startVm())
@@ -480,7 +488,6 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
         }
-
       }
       case Cmd.RemoveSlave(id, done) => {
         if (!slaves.contains(id)) {
