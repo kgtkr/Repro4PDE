@@ -222,7 +222,8 @@ object ControlPanel {
                         new Text {
                           text <== Bindings.createStringBinding(
                             () =>
-                              f"${slider.value.intValue()}%d秒/ ${slider.max.intValue()}%d秒",
+                              f"${slider.value.intValue()}%d${Locale.locale.secound}/ ${slider.max
+                                  .intValue()}%d${Locale.locale.secound}",
                             slider.value,
                             slider.max
                           )
@@ -282,9 +283,9 @@ object ControlPanel {
                           text <== Bindings.createStringBinding(
                             () =>
                               if (slaveBuildProperty.value.isDefined) {
-                                "並列実行を無効化する"
+                                Locale.locale.disableComparison
                               } else {
-                                "並列実行を有効化する"
+                                Locale.locale.enableComparison
                               },
                             slaveBuildProperty
                           )
@@ -357,7 +358,7 @@ object ControlPanel {
         .sorted
         .map { filename =>
           new Text {
-            text = s"deleted: ${filename}"
+            text = s"${Locale.locale.deleted}: ${filename}"
           }
         };
     val createdFiles =
@@ -367,7 +368,7 @@ object ControlPanel {
         .sorted
         .map { filename =>
           new Text {
-            text = s"created: ${filename}"
+            text = s"${Locale.locale.created}: ${filename}"
           }
         }
 
@@ -390,7 +391,7 @@ object ControlPanel {
             Some(new VBox {
               children = Seq(
                 new Text {
-                  text = s"changed: ${file}"
+                  text = s"${Locale.locale.changed}: ${file}"
                 },
                 new GridPane {
                   enum ChangeType(
