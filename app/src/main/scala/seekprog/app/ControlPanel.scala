@@ -41,6 +41,7 @@ import scalafx.geometry.Pos
 import scalafx.scene.layout.Priority
 import scalafx.scene.layout.Region
 import scala.collection.mutable.Map as MMap
+import scalafx.scene.shape.SVGPath
 
 enum PlayerState {
   case Playing;
@@ -255,17 +256,27 @@ object ControlPanel {
                           alignment = Pos.Center
                           children = Seq(
                             new Button {
-                              text <== Bindings.createStringBinding(
-                                () =>
-                                  if (
-                                    playerState.value == PlayerState.Playing
-                                  ) {
-                                    "⏸"
-                                  } else {
-                                    "▶"
-                                  },
-                                playerState
-                              )
+                              val SIZE = 25;
+                              prefWidth = SIZE
+                              prefHeight = SIZE
+                              minWidth = SIZE
+                              minHeight = SIZE
+                              graphic = new SVGPath {
+                                scaleX = 0.015
+                                scaleY = 0.015
+                                content <== Bindings.createStringBinding(
+                                  () =>
+                                    if (
+                                      playerState.value == PlayerState.Playing
+                                    ) {
+                                      SVGResources.pause
+                                    } else {
+                                      SVGResources.play
+                                    },
+                                  playerState
+                                )
+                                fill = Black
+                              }
                               disable <== loading
                               onAction = _ => {
                                 playerState.value match {
