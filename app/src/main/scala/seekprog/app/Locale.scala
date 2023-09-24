@@ -11,6 +11,7 @@ object Locale {
     val deleted = "deleted";
     val created = "created";
     val changed = "changed";
+    val unchanged = "unchanged";
   };
   val locales = Map(
     "en" -> defaultLocale,
@@ -21,6 +22,7 @@ object Locale {
       val deleted = "削除";
       val created = "作成";
       val changed = "変更";
+      val unchanged = "変更がありません";
     }
   );
   val locale = locales.getOrElse(lang, defaultLocale);
@@ -33,4 +35,5 @@ abstract class Locale {
   val deleted: String;
   val created: String;
   val changed: String;
+  val unchanged: String;
 }

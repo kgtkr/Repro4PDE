@@ -606,7 +606,17 @@ object ControlPanel {
         }
 
     if (deletedFiles.isEmpty && createdFiles.isEmpty && changedFiles.isEmpty) {
-      new VBox()
+      new VBox {
+        children = Seq(
+          new TextFlow {
+            children = Seq(
+              new Text {
+                text = Locale.locale.unchanged
+              }
+            )
+          }
+        )
+      }
     } else {
       new ScrollPane {
         val sp = this
