@@ -270,17 +270,20 @@ object ControlPanel {
                               onAction = _ => {
                                 playerState.value match {
                                   case PlayerState.Playing => {
-                                    loading.value = true
-                                    editorManager.send(
-                                      EditorManager.Cmd.PauseSketch(
-                                        donePromise {
-                                          Platform.runLater {
-                                            playerState.value =
-                                              PlayerState.Paused;
+                                    if (!loading.value) {
+                                      loading.value = true
+                                      editorManager.send(
+                                        EditorManager.Cmd.PauseSketch(
+                                          donePromise {
+                                            Platform.runLater {
+                                              playerState.value =
+                                                PlayerState.Paused;
+                                            }
                                           }
-                                        }
+                                        )
                                       )
-                                    )
+                                    }
+
                                   }
                                   case PlayerState.Paused => {
                                     loading.value = true
@@ -329,34 +332,38 @@ object ControlPanel {
                                   currentBuildProperty
                                 )
                               onAction = _ => {
-                                currentBuildProperty.value match {
-                                  case Some(currentBuild) if !loading.value => {
-                                    slaveBuildProperty.value match {
-                                      case Some(slaveBuild) => {
-                                        loading.value = true
-                                        slaveBuildProperty.value = None
-                                        editorManager.send(
-                                          EditorManager.Cmd.RemoveSlave(
-                                            slaveBuild.id,
-                                            donePromise()
+                                if (!loading.value) {
+                                  currentBuildProperty.value match {
+                                    case Some(currentBuild)
+                                        if !loading.value => {
+                                      slaveBuildProperty.value match {
+                                        case Some(slaveBuild) => {
+                                          loading.value = true
+                                          slaveBuildProperty.value = None
+                                          editorManager.send(
+                                            EditorManager.Cmd.RemoveSlave(
+                                              slaveBuild.id,
+                                              donePromise()
+                                            )
                                           )
-                                        )
-                                      }
-                                      case None => {
-                                        loading.value = true
-                                        slaveBuildProperty.value =
-                                          Some(currentBuild)
-                                        editorManager.send(
-                                          EditorManager.Cmd.AddSlave(
-                                            currentBuild.id,
-                                            donePromise()
+                                        }
+                                        case None => {
+                                          loading.value = true
+                                          slaveBuildProperty.value =
+                                            Some(currentBuild)
+                                          editorManager.send(
+                                            EditorManager.Cmd.AddSlave(
+                                              currentBuild.id,
+                                              donePromise()
+                                            )
                                           )
-                                        )
+                                        }
                                       }
                                     }
+                                    case _ => {}
                                   }
-                                  case _ => {}
                                 }
+
                               }
                             }
                           )
