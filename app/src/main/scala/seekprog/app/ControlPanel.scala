@@ -42,6 +42,7 @@ import scalafx.scene.layout.Priority
 import scalafx.scene.layout.Region
 import scala.collection.mutable.Map as MMap
 import scalafx.scene.shape.SVGPath
+import scala.collection.mutable.Queue as MQueue
 
 enum PlayerState {
   case Playing;
@@ -71,6 +72,20 @@ object ControlPanel {
       case None => {
         val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
         val loading = BooleanProperty(false);
+        val queue = new MQueue[() => Unit]();
+        def addQueue(f: => Unit) = {
+          queue.enqueue(() => f)
+          if (!loading.value) {
+            nextQueue()
+          }
+        }
+        def nextQueue() = {
+          if (queue.nonEmpty) {
+            val f = queue.dequeue();
+            loading.value = true
+            f();
+          }
+        }
         val editorManager = new EditorManager(editor)
         editorManager.start()
         val playerState = ObjectProperty(PlayerState.Stopped);
@@ -104,16 +119,17 @@ object ControlPanel {
           promise.future.onComplete(result => {
             Platform.runLater {
               loading.value = false
-            }
 
-            result match {
-              case Success(_) => {
-                onSuccess
+              result match {
+                case Success(_) => {
+                  onSuccess
+                }
+                case Failure(e) => {
+                  // TODO: エラーの種類によってはログに残さない(ビルドエラーなど)
+                  Logger.err(e);
+                }
               }
-              case Failure(e) => {
-                // TODO: エラーの種類によってはログに残さない(ビルドエラーなど)
-                Logger.err(e);
-              }
+              nextQueue()
             }
           })
           promise
@@ -151,8 +167,7 @@ object ControlPanel {
                   case filename: Path => {
                     if (filename.toString().endsWith(".pde")) {
                       Platform.runLater {
-                        if (!loading.value) {
-                          loading.value = true
+                        addQueue {
                           editorManager.send(
                             EditorManager.Cmd.ReloadSketch(donePromise())
                           )
@@ -178,13 +193,15 @@ object ControlPanel {
           val stage = new Stage {
             title = "Seekprog"
             onCloseRequest = _ => {
-              loading.value = true
-              editorManager.send(
-                EditorManager.Cmd.Exit(donePromise())
-              );
-              fileWatchThread.interrupt();
-              instances.synchronized {
-                instances.remove(editor)
+              addQueue {
+                editorManager.send(
+                  EditorManager.Cmd.Exit(donePromise())
+                );
+
+                fileWatchThread.interrupt();
+                instances.synchronized {
+                  instances.remove(editor)
+                }
               }
             }
             scene = new Scene(600, 300) {
@@ -207,13 +224,14 @@ object ControlPanel {
                                 if (
                                   oldChanging && !changing && !loading.value
                                 ) {
-                                  loading.value = true
-                                  editorManager.send(
-                                    EditorManager.Cmd.UpdateLocation(
-                                      (value.value * 60).toInt,
-                                      donePromise()
-                                    )
-                                  );
+                                  addQueue {
+                                    editorManager.send(
+                                      EditorManager.Cmd.UpdateLocation(
+                                        (value.value * 60).toInt,
+                                        donePromise()
+                                      )
+                                    );
+                                  }
                                 }
                                 ()
                             })
@@ -279,50 +297,44 @@ object ControlPanel {
                               }
                               disable <== loading
                               onAction = _ => {
-                                playerState.value match {
-                                  case PlayerState.Playing => {
-                                    if (!loading.value) {
-                                      loading.value = true
-                                      editorManager.send(
-                                        EditorManager.Cmd.PauseSketch(
-                                          donePromise {
-                                            Platform.runLater {
+                                if (!loading.value) {
+                                  addQueue {
+                                    playerState.value match {
+                                      case PlayerState.Playing => {
+                                        editorManager.send(
+                                          EditorManager.Cmd.PauseSketch(
+                                            donePromise {
                                               playerState.value =
                                                 PlayerState.Paused;
-                                            }
-                                          }
-                                        )
-                                      )
-                                    }
 
-                                  }
-                                  case PlayerState.Paused => {
-                                    loading.value = true
-                                    editorManager.send(
-                                      EditorManager.Cmd.ResumeSketch(
-                                        donePromise {
-                                          Platform.runLater {
-                                            playerState.value =
-                                              PlayerState.Playing;
-                                          }
-                                        }
-                                      )
-                                    )
-                                  }
-                                  case PlayerState.Stopped => {
-                                    loading.value = true
-                                    editorManager.send(
-                                      EditorManager.Cmd.StartSketch(
-                                        donePromise {
-                                          Platform.runLater {
-                                            playerState.value =
-                                              PlayerState.Playing;
-                                          }
-                                        }
-                                      )
-                                    )
+                                            }
+                                          )
+                                        )
+                                      }
+                                      case PlayerState.Paused => {
+                                        editorManager.send(
+                                          EditorManager.Cmd.ResumeSketch(
+                                            donePromise {
+                                              playerState.value =
+                                                PlayerState.Playing;
+                                            }
+                                          )
+                                        )
+                                      }
+                                      case PlayerState.Stopped => {
+                                        editorManager.send(
+                                          EditorManager.Cmd.StartSketch(
+                                            donePromise {
+                                              playerState.value =
+                                                PlayerState.Playing;
+                                            }
+                                          )
+                                        )
+                                      }
+                                    }
                                   }
                                 }
+
                               }
                             },
                             new Button {
@@ -343,13 +355,14 @@ object ControlPanel {
                                   currentBuildProperty
                                 )
                               onAction = _ => {
-                                if (!loading.value) {
-                                  currentBuildProperty.value match {
-                                    case Some(currentBuild)
-                                        if !loading.value => {
+                                (
+                                  loading.value,
+                                  currentBuildProperty.value
+                                ) match {
+                                  case (false, Some(currentBuild)) => {
+                                    addQueue {
                                       slaveBuildProperty.value match {
                                         case Some(slaveBuild) => {
-                                          loading.value = true
                                           slaveBuildProperty.value = None
                                           editorManager.send(
                                             EditorManager.Cmd.RemoveSlave(
@@ -359,7 +372,6 @@ object ControlPanel {
                                           )
                                         }
                                         case None => {
-                                          loading.value = true
                                           slaveBuildProperty.value =
                                             Some(currentBuild)
                                           editorManager.send(
@@ -371,8 +383,8 @@ object ControlPanel {
                                         }
                                       }
                                     }
-                                    case _ => {}
                                   }
+                                  case _ => {}
                                 }
 
                               }
