@@ -20,6 +20,14 @@ import processing.app.syntax.PdeTextAreaDefaults
 import processing.app.syntax.Token
 import java.awt.Color
 import processing.app.SketchException
+import java.io.File
+import processing.mode.java.preproc.PreprocessorResult
+import scala.io.Source
+import java.io.PrintWriter
+import processing.app.Base
+import java.nio.file.Path
+import java.nio.file.Files
+import java.nio.charset.StandardCharsets
 
 object EditorManager {
   enum Cmd {
@@ -87,7 +95,60 @@ class EditorManager(val editor: JavaEditor) {
   private def updateBuild() = {
     editor.statusEmpty();
     editor.clearConsole();
-    val javaBuild = new JavaBuild(editor.getSketch());
+    val javaBuild = new JavaBuild(editor.getSketch()) {
+      override def preprocess(
+          srcFolder: File,
+          sizeWarning: Boolean
+      ): PreprocessorResult = {
+        val result = super.preprocess(srcFolder, sizeWarning);
+
+        val className = result.getClassName();
+        val file = new File(
+          srcFolder,
+          className + ".java"
+        );
+        val text = Source.fromFile(file).mkString;
+        val newText = text.replaceFirst(
+          "extends PApplet",
+          "extends seekprog.runtime.PAppletRuntime"
+        );
+        file.delete();
+        val writer = new PrintWriter(file);
+        writer.write(newText);
+        writer.close();
+
+        val libDir = Base
+          .getSketchbookToolsFolder()
+          .toPath()
+          .resolve(
+            Path.of(
+              SeekprogApp.toolName,
+              "tool",
+              "lib"
+            )
+          );
+        val cp = Files
+          .readString(
+            libDir.resolve("runtime-classpath.txt"),
+            StandardCharsets.UTF_8
+          )
+          .split(",")
+          .map(name => libDir.resolve(name.trim()).toString())
+          .map(File.pathSeparator + _)
+          .mkString("");
+
+        val classPathField =
+          classOf[JavaBuild].getDeclaredField("classPath");
+        classPathField.setAccessible(true);
+        classPathField.set(
+          this,
+          this.getClassPath()
+            + cp
+        );
+
+        result
+      }
+    };
     try {
       javaBuild.build(true);
     } catch {

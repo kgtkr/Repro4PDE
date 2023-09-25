@@ -9,9 +9,7 @@ import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.ExceptionEvent;
-import java.io.File;
 import scala.jdk.CollectionConverters._
-import processing.app.Base
 import processing.mode.java.JavaBuild
 import java.util.concurrent.LinkedTransferQueue
 import java.nio.channels.ServerSocketChannel
@@ -111,38 +109,9 @@ class VmManager(
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
 
-    val libDir = Base
-      .getSketchbookToolsFolder()
-      .toPath()
-      .resolve(
-        Path.of(
-          SeekprogApp.toolName,
-          "tool",
-          "lib"
-        )
-      );
-    val cp = Files
-      .readString(
-        libDir.resolve("runtime-classpath.txt"),
-        StandardCharsets.UTF_8
-      )
-      .split(",")
-      .map(name => libDir.resolve(name.trim()).toString())
-      .map(File.pathSeparator + _)
-      .mkString("");
-
     running = defaultRunning;
     val runner =
       new Runner(javaBuild, runnerListener);
-
-    val classPathField =
-      javaBuild.getClass().getDeclaredField("classPath");
-    classPathField.setAccessible(true);
-    classPathField.set(
-      javaBuild,
-      javaBuild.getClassPath()
-        + cp
-    );
 
     val vm =
       runner.debug(Array(sockPath.toString()));
