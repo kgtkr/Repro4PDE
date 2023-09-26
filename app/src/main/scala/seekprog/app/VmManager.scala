@@ -29,13 +29,13 @@ import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
 import com.sun.jdi.VMDisconnectedException
 import com.sun.jdi.event.VMDeathEvent
-import seekprog.shared.PdeEventWrapper
 import seekprog.shared.RuntimeCmd
 import seekprog.shared.RuntimeEvent
+import seekprog.shared.FrameState
 
 object VmManager {
   enum SlaveSyncCmd {
-    case AddedEvents(events: List[List[PdeEventWrapper]]);
+    case AddedEvents(frameStates: List[FrameState]);
     case LimitFrameCount(frameCount: Int);
   }
 
@@ -53,7 +53,7 @@ object VmManager {
     case UpdateLocation(
         frameCount: Int,
         trimMax: Boolean,
-        events: List[List[PdeEventWrapper]],
+        frameStates: List[FrameState],
         windowX: Int,
         windowY: Int
     );
@@ -83,7 +83,7 @@ class VmManager(
     val runnerListener: RunnerListener,
     val targetFrameCount: Int,
     val defaultRunning: Boolean,
-    val pdeEvents: List[List[PdeEventWrapper]]
+    val frameStates: List[FrameState]
 ) {
   import VmManager._;
 
@@ -263,8 +263,8 @@ class VmManager(
                             vm.mirrorOf(targetFrameCount),
                             vm.mirrorOf(
                               (if (slaveMode)
-                                 pdeEvents.toList.take(targetFrameCount + 1)
-                               else pdeEvents.toList).asJson.noSpaces
+                                 frameStates.toList.take(targetFrameCount + 1)
+                               else frameStates.toList).asJson.noSpaces
                             ),
                             vm.mirrorOf(!running),
                             vm.mirrorOf(slaveMode),
@@ -336,7 +336,7 @@ class VmManager(
               cmd match {
                 case SlaveSyncCmd.AddedEvents(events) => {
                   runtimeCmdQueue.add(
-                    RuntimeCmd.AddedEvents(events)
+                    RuntimeCmd.AddedFrameStates(events)
                   );
                 }
                 case SlaveSyncCmd.LimitFrameCount(frameCount) => {
@@ -363,7 +363,7 @@ class VmManager(
                       .OnUpdateLocation(
                         frameCount,
                         trimMax,
-                        events,
+                        frameStates,
                         windowX,
                         windowY
                       ) => {
@@ -372,7 +372,7 @@ class VmManager(
                       Event.UpdateLocation(
                         frameCount,
                         trimMax,
-                        events,
+                        frameStates,
                         windowX,
                         windowY
                       )

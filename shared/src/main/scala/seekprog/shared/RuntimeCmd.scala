@@ -19,7 +19,7 @@ enum RuntimeCmd {
   case Pause();
   case Resume();
   // slave mode only
-  case AddedEvents(events: List[List[PdeEventWrapper]]);
+  case AddedFrameStates(frameStates: List[FrameState]);
   // master mode only
   case LimitFrameCount(frameCount: Int);
 

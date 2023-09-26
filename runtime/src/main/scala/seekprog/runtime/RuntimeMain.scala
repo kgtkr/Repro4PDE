@@ -13,13 +13,13 @@ import java.nio.charset.StandardCharsets
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.channels.Channels
-import seekprog.shared.PdeEventWrapper
 import seekprog.shared.RuntimeCmd
 import seekprog.shared.RuntimeEvent
+import seekprog.shared.FrameState
 
 object RuntimeMain {
   var targetFrameCount = 0;
-  val events: Buffer[List[PdeEventWrapper]] = Buffer();
+  val frameStates: Buffer[FrameState] = Buffer();
   private var sc: SocketChannel = null;
   var sketchHandler: SketchHandler = null;
   var paused = false;
@@ -28,14 +28,14 @@ object RuntimeMain {
   val runtimeEventQueue = new LinkedTransferQueue[RuntimeEvent]();
   var surface: PSurfaceAWTRuntime = null;
   var slaveMode = false;
-  val addedEventsQueue = new LinkedTransferQueue[List[List[PdeEventWrapper]]]();
+  val addedFrameStatesQueue = new LinkedTransferQueue[List[FrameState]]();
   var frameCountLimit = Int.MaxValue;
   var isDebug = false;
 
   def init(
       sketch: PApplet,
       targetFrameCount: Int,
-      events: String,
+      frameStatesJson: String,
       initPaused: Boolean,
       slaveMode: Boolean,
       isDebug: Boolean
@@ -53,8 +53,8 @@ object RuntimeMain {
     }
 
     this.targetFrameCount = targetFrameCount;
-    this.events ++= decode[List[List[PdeEventWrapper]]](
-      events
+    this.frameStates ++= decode[List[FrameState]](
+      frameStatesJson
     ).right.get
     this.sc = {
       val sockPath = Path.of(sketch.args(0));
@@ -92,8 +92,8 @@ object RuntimeMain {
             paused = false;
             resumeQueue.put(());
           }
-          case RuntimeCmd.AddedEvents(events) => {
-            addedEventsQueue.put(events);
+          case RuntimeCmd.AddedFrameStates(events) => {
+            addedFrameStatesQueue.put(events);
           }
           case RuntimeCmd.LimitFrameCount(frameCount) => {
             frameCountLimit = frameCount;

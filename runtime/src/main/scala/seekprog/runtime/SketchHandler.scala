@@ -8,6 +8,7 @@ import io.circe._, io.circe.generic.semiauto._
 import scala.util.Try
 import seekprog.shared.PdeEventWrapper
 import seekprog.shared.RuntimeEvent
+import seekprog.shared.FrameState
 
 class SketchHandler(
     applet: PApplet,
@@ -15,12 +16,12 @@ class SketchHandler(
 ) {
   var onTarget = false;
   val currentFrameEvents = Buffer[PdeEventWrapper]();
-  val eventsBuf = Buffer[List[PdeEventWrapper]]();
+  val frameStatesBuf = Buffer[FrameState]();
   var stopReproductionEvent = false;
   var startTime = 0L;
 
   def pre() = {
-    if (this.applet.frameCount == 1) {
+    if (this.applet.frameCount == 0) {
       this.startTime = System.nanoTime();
 
       if (
@@ -53,9 +54,9 @@ class SketchHandler(
     }
 
     if (!this.stopReproductionEvent) {
-      Try(RuntimeMain.events(this.applet.frameCount)).toOption
+      Try(RuntimeMain.frameStates(this.applet.frameCount)).toOption
         .foreach {
-          _.foreach {
+          _.events.foreach {
             case PdeEventWrapper.Mouse(evt) =>
               this.applet.postEvent(ReproductionEvent.mouseEventToPde(evt));
             case PdeEventWrapper.Key(evt) =>
@@ -65,7 +66,11 @@ class SketchHandler(
     }
 
     if (this.onTarget) {
-      this.eventsBuf += this.currentFrameEvents.toList;
+      this.frameStatesBuf += FrameState(
+        events = this.currentFrameEvents.toList,
+        // TODO: randomSeed
+        randomSeed = 0
+      )
       this.currentFrameEvents.clear();
     }
 
@@ -75,12 +80,12 @@ class SketchHandler(
           .OnUpdateLocation(
             this.applet.frameCount,
             this.stopReproductionEvent,
-            this.eventsBuf.toList,
+            this.frameStatesBuf.toList,
             this.applet.windowX,
             this.applet.windowY
           )
       )
-      this.eventsBuf.clear();
+      this.frameStatesBuf.clear();
     }
   }
 

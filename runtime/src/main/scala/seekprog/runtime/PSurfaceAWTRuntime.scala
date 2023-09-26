@@ -70,6 +70,10 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   override def createThread(): Thread = {
     return new AnimationThreadRuntime {
       override def callDraw(): Unit = {
+        if (sketch.frameCount == 0) {
+          // setupの前には呼ばれない仕様のため、ここで呼ぶ
+          RuntimeMain.sketchHandler.pre();
+        }
         sketch.handleDraw();
         if (RuntimeMain.sketchHandler.onTarget) {
           render();
@@ -122,9 +126,10 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
             );
           }
           while (
-            RuntimeMain.slaveMode && RuntimeMain.events.length <= sketch.frameCount
+            RuntimeMain.slaveMode && RuntimeMain.frameStates.length <= sketch.frameCount
           ) {
-            RuntimeMain.events ++= RuntimeMain.addedEventsQueue.take();
+            RuntimeMain.frameStates ++= RuntimeMain.addedFrameStatesQueue
+              .take();
           }
 
           val delayThreshold = 12;

@@ -20,7 +20,7 @@ enum RuntimeEvent {
   case OnUpdateLocation(
       frameCount: Int,
       trimMax: Boolean,
-      events: List[List[PdeEventWrapper]],
+      frameStates: List[FrameState],
       windowX: Int,
       windowY: Int
   );

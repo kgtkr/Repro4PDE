@@ -3,7 +3,6 @@ package seekprog.app;
 import scala.jdk.CollectionConverters._
 import processing.mode.java.JavaBuild
 import java.util.concurrent.LinkedTransferQueue
-import seekprog.shared.PdeEventWrapper
 import scala.collection.mutable.Buffer
 import processing.mode.java.JavaEditor
 import scala.concurrent.Promise
@@ -28,6 +27,7 @@ import processing.app.Base
 import java.nio.file.Path
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
+import seekprog.shared.FrameState
 
 object EditorManager {
   enum Cmd {
@@ -81,7 +81,7 @@ class EditorManager(val editor: JavaEditor) {
 
   var frameCount = 0;
   var maxFrameCount = 0;
-  val pdeEvents = Buffer[List[PdeEventWrapper]]();
+  val frameStates = Buffer[FrameState]();
   var running = false;
   var currentBuild: Build = null;
   val builds = Buffer[Build]();
@@ -246,7 +246,7 @@ class EditorManager(val editor: JavaEditor) {
       runnerListener = new RunnerListenerEdtAdapter(editor),
       targetFrameCount = this.frameCount,
       defaultRunning = this.running,
-      pdeEvents = this.pdeEvents.toList
+      frameStates = this.frameStates.toList
     );
     val vmms = new MasterVm(masterVmManager, slaveVms);
     masterVmManager.listen { event =>
@@ -299,7 +299,7 @@ class EditorManager(val editor: JavaEditor) {
         runnerListener = new RunnerListenerEdtAdapter(editor),
         targetFrameCount = this.frameCount,
         defaultRunning = true,
-        pdeEvents = this.pdeEvents.toList
+        frameStates = this.frameStates.toList
       ),
       buildId,
       this.frameCount + 1
@@ -611,22 +611,23 @@ class EditorManager(val editor: JavaEditor) {
           Math.max(this.maxFrameCount, frameCount);
         };
 
-        if (this.maxFrameCount + 1 < this.pdeEvents.length) {
-          this.pdeEvents.trimEnd(
-            this.pdeEvents.length - (this.maxFrameCount + 1)
+        if (this.maxFrameCount + 1 < this.frameStates.length) {
+          this.frameStates.trimEnd(
+            this.frameStates.length - (this.maxFrameCount + 1)
           );
-        } else if (this.maxFrameCount + 1 > this.pdeEvents.length) {
-          this.pdeEvents ++= Seq.fill(
-            this.maxFrameCount + 1 - this.pdeEvents.length
-          )(List());
+        } else if (this.maxFrameCount + 1 > this.frameStates.length) {
+          this.frameStates ++= Seq.fill(
+            this.maxFrameCount + 1 - this.frameStates.length
+          )(null /*ここのnullは後続の処理で消える*/ );
         }
         for ((event, i) <- events.zipWithIndex) {
-          this.pdeEvents(frameCount - events.length + i + 1) = event;
+          this.frameStates(frameCount - events.length + i + 1) = event;
         }
+        assert(this.frameStates.forall(_ != null));
         for ((_, slaveVm) <- vmms.slaves.filter(!_._2.vmManager.isExited)) {
           slaveVm.vmManager.sendSlaveSync(
             VmManager.SlaveSyncCmd.AddedEvents(
-              pdeEvents
+              frameStates
                 .take(
                   frameCount + 1
                 )
