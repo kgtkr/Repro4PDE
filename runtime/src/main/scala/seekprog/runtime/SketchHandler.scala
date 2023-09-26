@@ -53,7 +53,7 @@ class SketchHandler(
     }
 
     if (!this.stopReproductionEvent) {
-      Try(RuntimeMain.events(this.applet.frameCount - 1)).toOption
+      Try(RuntimeMain.events(this.applet.frameCount)).toOption
         .foreach {
           _.foreach {
             case PdeEventWrapper.Mouse(evt) =>

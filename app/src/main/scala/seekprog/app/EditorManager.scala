@@ -302,7 +302,7 @@ class EditorManager(val editor: JavaEditor) {
         pdeEvents = this.pdeEvents.toList
       ),
       buildId,
-      this.frameCount
+      this.frameCount + 1
     );
 
     slaveVm.vmManager.listen { event =>
@@ -611,30 +611,30 @@ class EditorManager(val editor: JavaEditor) {
           Math.max(this.maxFrameCount, frameCount);
         };
 
-        if (this.maxFrameCount < this.pdeEvents.length) {
+        if (this.maxFrameCount + 1 < this.pdeEvents.length) {
           this.pdeEvents.trimEnd(
-            this.pdeEvents.length - this.maxFrameCount
+            this.pdeEvents.length - (this.maxFrameCount + 1)
           );
-        } else if (this.maxFrameCount > this.pdeEvents.length) {
+        } else if (this.maxFrameCount + 1 > this.pdeEvents.length) {
           this.pdeEvents ++= Seq.fill(
-            this.maxFrameCount - this.pdeEvents.length
+            this.maxFrameCount + 1 - this.pdeEvents.length
           )(List());
         }
         for ((event, i) <- events.zipWithIndex) {
-          this.pdeEvents(frameCount - events.length + i) = event;
+          this.pdeEvents(frameCount - events.length + i + 1) = event;
         }
         for ((_, slaveVm) <- vmms.slaves.filter(!_._2.vmManager.isExited)) {
           slaveVm.vmManager.sendSlaveSync(
             VmManager.SlaveSyncCmd.AddedEvents(
               pdeEvents
                 .take(
-                  frameCount
+                  frameCount + 1
                 )
                 .drop(slaveVm.pdeEventCount)
                 .toList
             )
           );
-          slaveVm.pdeEventCount = frameCount;
+          slaveVm.pdeEventCount = frameCount + 1;
         }
 
         this.eventListeners.foreach(

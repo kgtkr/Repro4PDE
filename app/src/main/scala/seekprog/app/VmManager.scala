@@ -263,7 +263,7 @@ class VmManager(
                             vm.mirrorOf(targetFrameCount),
                             vm.mirrorOf(
                               (if (slaveMode)
-                                 pdeEvents.toList.take(targetFrameCount)
+                                 pdeEvents.toList.take(targetFrameCount + 1)
                                else pdeEvents.toList).asJson.noSpaces
                             ),
                             vm.mirrorOf(!running),
