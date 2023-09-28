@@ -32,6 +32,7 @@ import com.sun.jdi.event.VMDeathEvent
 import seekprog.shared.RuntimeCmd
 import seekprog.shared.RuntimeEvent
 import seekprog.shared.FrameState
+import seekprog.shared.InitParams
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -260,15 +261,20 @@ class VmManager(
                             .get(0),
                           Arrays.asList(
                             instance,
-                            vm.mirrorOf(targetFrameCount),
                             vm.mirrorOf(
-                              (if (slaveMode)
-                                 frameStates.toList.take(targetFrameCount + 1)
-                               else frameStates.toList).asJson.noSpaces
-                            ),
-                            vm.mirrorOf(!running),
-                            vm.mirrorOf(slaveMode),
-                            vm.mirrorOf(SeekprogApp.isDebug)
+                              InitParams(
+                                targetFrameCount = targetFrameCount,
+                                frameStates =
+                                  if (slaveMode)
+                                    frameStates.toList.take(
+                                      targetFrameCount + 1
+                                    )
+                                  else frameStates.toList,
+                                initPaused = !running,
+                                slaveMode = slaveMode,
+                                isDebug = SeekprogApp.isDebug
+                              ).asJson.noSpaces
+                            )
                           ),
                           0
                         );
