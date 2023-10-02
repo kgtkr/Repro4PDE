@@ -16,6 +16,7 @@ import java.nio.channels.Channels
 import seekprog.shared.RuntimeCmd
 import seekprog.shared.RuntimeEvent
 import seekprog.shared.FrameState
+import seekprog.shared.InitParams
 
 object RuntimeMain {
   var targetFrameCount = 0;
@@ -34,16 +35,13 @@ object RuntimeMain {
 
   def init(
       sketch: PApplet,
-      targetFrameCount: Int,
-      frameStatesJson: String,
-      initPaused: Boolean,
-      slaveMode: Boolean,
-      isDebug: Boolean
+      paramsJson: String
   ) = {
-    this.paused = initPaused;
-    this.slaveMode = slaveMode;
-    this.notTriggerPausedEvent = initPaused;
-    this.isDebug = isDebug;
+    val params = decode[InitParams](paramsJson).right.get;
+    this.paused = params.initPaused;
+    this.slaveMode = params.slaveMode;
+    this.notTriggerPausedEvent = params.initPaused;
+    this.isDebug = params.isDebug;
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
     Class.forName(renderer);
     {
@@ -52,10 +50,8 @@ object RuntimeMain {
       field.set(sketch, renderer);
     }
 
-    this.targetFrameCount = targetFrameCount;
-    this.frameStates ++= decode[List[FrameState]](
-      frameStatesJson
-    ).right.get
+    this.targetFrameCount = params.targetFrameCount;
+    this.frameStates ++= params.frameStates;
     this.sc = {
       val sockPath = Path.of(sketch.args(0));
       val sockAddr = UnixDomainSocketAddress.of(sockPath);
