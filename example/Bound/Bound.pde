@@ -2,6 +2,7 @@ float x = 100;
 float y = 100;
 float dx = 3;
 float dy = 0;
+float r = 50;
 
 void setup() {
   size(600, 400);
@@ -12,17 +13,14 @@ void draw() {
   x += dx;
   y += dy;
   dy += 0.1;
-  if (x < 0) {
+  if (x < r && 0 > dx) {
     dx *= -1;
-    x = 0;
   }
-  if (width < x) {
+  if (width - r < x && 0 < dx) {
     dx *= -1;
-    x = width;
   }
-  if (height < y) {
-    dy *= -0.9; // ここの値を変える
-    y = height;
+  if (height - r < y && 0 < dy) {
+    dy *= -1;
   }
-  circle(x, y, 100);
+  circle(x, y, 2 * r);
 }
