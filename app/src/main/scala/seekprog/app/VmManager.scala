@@ -429,7 +429,8 @@ class VmManager(
       running = false;
 
       exitType match {
-        case ExitType.Running | ExitType.Exception => {
+        case ExitType.Running |
+            ExitType.Exception => { // ExitType.Runningは想定外のエラー
           vmForForceExit = Some(vm);
         }
         case _ => {}
