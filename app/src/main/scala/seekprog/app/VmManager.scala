@@ -187,7 +187,6 @@ class VmManager(
         try {
           while (true) {
             taskQueue.add(TVmEvent(eventQueue.remove()));
-
           }
         } catch {
           case _: VMDisconnectedException => {}
@@ -296,6 +295,12 @@ class VmManager(
                   }
                   case _ => {}
                 }
+              }
+
+              if (
+                exitType != ExitType.ExitCmd || exitType != ExitType.VmDeath
+              ) {
+                vm.resume();
               }
             }
             case TCmd(cmd) => {
@@ -409,10 +414,6 @@ class VmManager(
                 }
               }
             }
-          }
-
-          if (exitType != ExitType.ExitCmd || exitType != ExitType.VmDeath) {
-            vm.resume();
           }
         }
       } catch {
