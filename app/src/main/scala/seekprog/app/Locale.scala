@@ -12,6 +12,7 @@ object Locale {
     val created = "created";
     val changed = "changed";
     val unchanged = "unchanged";
+    val slaveError = "An error occurred in the past sketch";
   };
   val locales = Map(
     "en" -> defaultLocale,
@@ -23,6 +24,7 @@ object Locale {
       val created = "作成";
       val changed = "変更";
       val unchanged = "変更がありません";
+      val slaveError = "過去のスケッチでエラーが発生しました";
     }
   );
   val locale = locales.getOrElse(lang, defaultLocale);
@@ -36,4 +38,5 @@ abstract class Locale {
   val created: String;
   val changed: String;
   val unchanged: String;
+  val slaveError: String;
 }

@@ -43,6 +43,7 @@ import scalafx.scene.layout.Region
 import scala.collection.mutable.Map as MMap
 import scalafx.scene.shape.SVGPath
 import scala.collection.mutable.Queue as MQueue
+import seekprog.app.EditorManager.Event
 
 enum PlayerState {
   case Playing;
@@ -92,6 +93,7 @@ object ControlPanel {
         val currentBuildProperty = ObjectProperty[Option[Build]](None);
         val slaveBuildProperty = ObjectProperty[Option[Build]](None);
         val diffNodeProperty = ObjectProperty[Region](new VBox());
+        val slaveErrorProperty = ObjectProperty[Option[String]](None);
 
         def updateDiffNodeProperty() = {
           (slaveBuildProperty.value, currentBuildProperty.value) match {
@@ -262,6 +264,14 @@ object ControlPanel {
                                       .CreatedBuild(build) => {
                                   currentBuildProperty.value = Some(build)
                                 }
+                                case Event.ClearLog() => {
+                                  slaveErrorProperty.value = None
+                                }
+                                case Event.LogError(slaveId, error) => {
+                                  if (slaveId.isDefined) {
+                                    slaveErrorProperty.value = Some(error)
+                                  }
+                                }
                               }
                             }
                           };
@@ -411,6 +421,29 @@ object ControlPanel {
                         node.prefWidth <== width
                         children = Seq(node)
                       }
+                    },
+                    new TextFlow {
+                      children = Seq(
+                        new Text {
+                          text <== Bindings.createStringBinding(
+                            () =>
+                              (
+                                slaveBuildProperty.value,
+                                slaveErrorProperty.value
+                              ) match {
+                                case (Some(_), Some(error)) => {
+                                  Locale.locale.slaveError + ": " + error
+                                }
+                                case _ => {
+                                  ""
+                                }
+                              },
+                            slaveErrorProperty,
+                            slaveBuildProperty
+                          )
+                          fill = Red
+                        }
+                      )
                     }
                   )
                 }

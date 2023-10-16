@@ -28,6 +28,7 @@ import java.nio.file.Path
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
 import seekprog.shared.FrameState
+import processing.app.RunnerListener
 
 object EditorManager {
   enum Cmd {
@@ -52,6 +53,8 @@ object EditorManager {
     case UpdateLocation(frameCount: Int, max: Int);
     case Stopped(playing: Boolean);
     case CreatedBuild(build: Build);
+    case ClearLog();
+    case LogError(slaveId: Option[Int], error: String);
   }
 
   class SlaveVm(
@@ -236,6 +239,7 @@ class EditorManager(val editor: JavaEditor) {
   private def startVm() = {
     assert(oMasterVm.isEmpty);
     editor.statusEmpty();
+    eventListeners.foreach(_(Event.ClearLog()));
 
     val slaveVms = MMap[Int, SlaveVm](
       slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
@@ -243,7 +247,21 @@ class EditorManager(val editor: JavaEditor) {
     val masterVmManager = new VmManager(
       javaBuild = currentBuild.javaBuild,
       slaveMode = false,
-      runnerListener = new RunnerListenerEdtAdapter(editor),
+      runnerListener = new RunnerListenerEdtAdapter(editor) {
+        override def statusError(x: Exception): Unit = {
+          eventListeners.foreach(
+            _(Event.LogError(None, x.getMessage()))
+          );
+          super.statusError(x);
+        }
+
+        override def statusError(x: String): Unit = {
+          eventListeners.foreach(
+            _(Event.LogError(None, x))
+          );
+          super.statusError(x);
+        }
+      },
       targetFrameCount = this.frameCount,
       defaultRunning = this.running,
       frameStates = this.frameStates.toList
@@ -296,7 +314,23 @@ class EditorManager(val editor: JavaEditor) {
       new VmManager(
         javaBuild = builds(buildId).javaBuild,
         slaveMode = true,
-        runnerListener = new RunnerListenerEdtAdapter(editor),
+        runnerListener = new RunnerListener {
+          override def isHalted(): Boolean = false;
+          override def startIndeterminate(): Unit = {}
+          override def statusError(x$0: String): Unit = {
+            eventListeners.foreach(
+              _(Event.LogError(Some(buildId), x$0))
+            );
+          }
+          override def statusError(x$0: Exception): Unit = {
+            eventListeners.foreach(
+              _(Event.LogError(Some(buildId), x$0.getMessage()))
+            );
+          }
+          override def statusHalt(): Unit = {}
+          override def statusNotice(x$0: String): Unit = {}
+          override def stopIndeterminate(): Unit = {}
+        },
         targetFrameCount = this.frameCount,
         defaultRunning = true,
         frameStates = this.frameStates.toList
