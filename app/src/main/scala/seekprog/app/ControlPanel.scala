@@ -238,7 +238,17 @@ object ControlPanel {
                                     editorManager.send(
                                       EditorManager.Cmd.UpdateLocation(
                                         (value.value * 60).toInt,
-                                        donePromise()
+                                        donePromise {
+                                          if (
+                                            playerState.value == PlayerState
+                                              .Stopped(
+                                                true
+                                              )
+                                          ) {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
+                                        }
                                       )
                                     );
                                   }
