@@ -50,7 +50,7 @@ object EditorManager {
 
   enum Event {
     case UpdateLocation(frameCount: Int, max: Int);
-    case Stopped();
+    case Stopped(playing: Boolean);
     case CreatedBuild(build: Build);
   }
 
@@ -650,8 +650,7 @@ class EditorManager(val editor: JavaEditor) {
         this.masterLocation = Some(new java.awt.Point(windowX, windowY));
       }
       case VmManager.Event.Stopped() => {
-        this.running = false;
-        this.eventListeners.foreach(_(Event.Stopped()))
+        this.eventListeners.foreach(_(Event.Stopped(this.running)))
       }
     }
   }

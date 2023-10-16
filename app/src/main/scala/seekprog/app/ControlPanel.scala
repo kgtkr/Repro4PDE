@@ -47,7 +47,7 @@ import scala.collection.mutable.Queue as MQueue
 enum PlayerState {
   case Playing;
   case Paused;
-  case Stopped;
+  case Stopped(nextPlaying: Boolean) // nextPlaying: reload時に自動再生される状態か
 }
 
 object ControlPanel {
@@ -88,7 +88,7 @@ object ControlPanel {
         }
         val editorManager = new EditorManager(editor)
         editorManager.start()
-        val playerState = ObjectProperty(PlayerState.Stopped);
+        val playerState = ObjectProperty(PlayerState.Stopped(false));
         val currentBuildProperty = ObjectProperty[Option[Build]](None);
         val slaveBuildProperty = ObjectProperty[Option[Build]](None);
         val diffNodeProperty = ObjectProperty[Region](new VBox());
@@ -169,7 +169,15 @@ object ControlPanel {
                       Platform.runLater {
                         addQueue {
                           editorManager.send(
-                            EditorManager.Cmd.ReloadSketch(donePromise())
+                            EditorManager.Cmd.ReloadSketch(donePromise {
+                              if (
+                                playerState.value == PlayerState.Stopped(
+                                  true
+                                )
+                              ) {
+                                playerState.value = PlayerState.Playing;
+                              }
+                            })
                           )
                         }
                       }
@@ -246,8 +254,9 @@ object ControlPanel {
                                     slider.value = value2.toDouble / 60
                                   }
                                 }
-                                case EditorManager.Event.Stopped() => {
-                                  playerState.value = PlayerState.Stopped
+                                case EditorManager.Event.Stopped(playing) => {
+                                  playerState.value =
+                                    PlayerState.Stopped(playing)
                                 }
                                 case EditorManager.Event
                                       .CreatedBuild(build) => {
@@ -321,7 +330,7 @@ object ControlPanel {
                                           )
                                         )
                                       }
-                                      case PlayerState.Stopped => {
+                                      case PlayerState.Stopped(_) => {
                                         editorManager.send(
                                           EditorManager.Cmd.StartSketch(
                                             donePromise {
