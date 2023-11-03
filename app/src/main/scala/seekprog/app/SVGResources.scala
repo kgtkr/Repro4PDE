@@ -1,4 +1,4 @@
-package seekprog.app
+package repro4pde.app
 
 object SVGResources {
   val pause =

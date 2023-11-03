@@ -31,7 +31,7 @@ lazy val codegenProject = project
   .in(file("codegen"))
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-codegen",
+    name := "repro4pde-codegen",
     Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
@@ -39,7 +39,7 @@ lazy val sharedProject = project
   .in(file("shared"))
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-shared",
+    name := "repro4pde-shared",
     libraryDependencies ++= circeDependencies
   );
 
@@ -47,7 +47,7 @@ lazy val utilsProject = project
   .in(file("utils"))
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-utils"
+    name := "repro4pde-utils"
   );
 
 lazy val runtimeProject = project
@@ -55,16 +55,16 @@ lazy val runtimeProject = project
   .dependsOn(sharedProject)
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-runtime",
+    name := "repro4pde-runtime",
     libraryDependencies ++= circeDependencies,
     Compile / sourceGenerators += Def.task {
-      val rootDir = sourceManaged.value / "seekprog"
+      val rootDir = sourceManaged.value / "repro4pde"
       IO.delete(rootDir)
       val cp = (codegenProject / Runtime / fullClasspath).value
       val r = (Compile / runner).value
       val s = streams.value
       r.run(
-        "seekprog.codegen.Codegen",
+        "repro4pde.codegen.Codegen",
         cp.files,
         Array(rootDir.getAbsolutePath()),
         s.log
@@ -78,7 +78,7 @@ lazy val toolProject = project
   .in(file("tool"))
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-tool",
+    name := "repro4pde-tool",
     assembly / assemblyExcludedJars := Attributed.blankSeq(
       Processing.allCpTask.value
     ),
@@ -90,7 +90,7 @@ lazy val appProject = project
   .dependsOn(utilsProject, sharedProject)
   .settings(sharedSettings)
   .settings(
-    name := "seekprog-app",
+    name := "repro4pde-app",
     libraryDependencies ++= Seq(
       "org.scalafx" %% "scalafx" % "20.0.0-R31" excludeAll (ExclusionRule(
         organization = "org.openjfx"
@@ -135,7 +135,7 @@ lazy val root = project
   )
   .settings(sharedSettings)
   .settings(
-    name := "seekprog",
+    name := "repro4pde",
     buildTool := processingTool.buildToolTask.value,
     deployToolDev := processingTool.deployToolDevTask.value
   )

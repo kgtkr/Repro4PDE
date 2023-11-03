@@ -1,4 +1,4 @@
-package seekprog.codegen;
+package repro4pde.codegen;
 
 import processing.core.PGraphics
 import java.nio.file.Files
@@ -23,7 +23,7 @@ import java.nio.file.Paths
   }
 
   val src = f"""
-    package seekprog.runtime;
+    package repro4pde.runtime;
 
     import processing.awt.PGraphicsJava2D
 

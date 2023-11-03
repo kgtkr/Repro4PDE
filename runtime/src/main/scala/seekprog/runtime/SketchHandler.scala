@@ -1,4 +1,4 @@
-package seekprog.runtime;
+package repro4pde.runtime;
 
 import processing.core.PApplet;
 import processing.event.MouseEvent
@@ -6,9 +6,9 @@ import processing.event.KeyEvent
 import scala.collection.mutable.Buffer
 import io.circe._, io.circe.generic.semiauto._
 import scala.util.Try
-import seekprog.shared.PdeEventWrapper
-import seekprog.shared.RuntimeEvent
-import seekprog.shared.FrameState
+import repro4pde.shared.PdeEventWrapper
+import repro4pde.shared.RuntimeEvent
+import repro4pde.shared.FrameState
 
 class SketchHandler(
     applet: PApplet,
@@ -29,7 +29,7 @@ class SketchHandler(
           .sketchRenderer() != classOf[PGraphicsJava2DRuntime].getName()
       ) {
         throw new RuntimeException(
-          "Seekprog not support renderer settings. size() must be two arguments."
+          "Repro4PDE not support renderer settings. size() must be two arguments."
         );
       }
 

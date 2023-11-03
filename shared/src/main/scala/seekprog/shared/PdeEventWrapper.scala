@@ -1,4 +1,4 @@
-package seekprog.shared;
+package repro4pde.shared;
 
 import io.circe._, io.circe.generic.semiauto._
 

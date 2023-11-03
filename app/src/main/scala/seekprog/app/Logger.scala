@@ -1,8 +1,8 @@
-package seekprog.app;
+package repro4pde.app;
 
 object Logger {
   def log(message: String): Unit = {
-    if (SeekprogApp.isDebug) {
+    if (Repro4PDEApp.isDebug) {
       println(s"INFO: $message")
     }
   }

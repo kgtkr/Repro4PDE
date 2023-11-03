@@ -1,6 +1,6 @@
-package seekprog.boot;
+package repro4pde.boot;
 
-class SeekprogDev() extends Seekprog() {
+class Repro4PDEDev() extends Repro4PDE() {
   override def getMenuTitle() = {
     super.getMenuTitle() + " (dev)"
   }

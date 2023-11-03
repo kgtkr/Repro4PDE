@@ -1,4 +1,4 @@
-package seekprog.runtime;
+package repro4pde.runtime;
 
 import processing.awt.PSurfaceAWT
 import processing.core.PGraphics;
@@ -10,7 +10,7 @@ import java.awt.event.{
   MouseWheelListener,
   KeyListener
 }
-import seekprog.shared.RuntimeEvent
+import repro4pde.shared.RuntimeEvent
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   var mouseListeners: Array[MouseListener] = null;
@@ -96,17 +96,17 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
         callDraw();
         if (PSurfaceAWTRuntime.this.frameRateTarget != 60) {
           throw new RuntimeException(
-            "Seekprog only supports 60fps"
+            "Repro4PDE only supports 60fps"
           );
         }
         if (sketch.finished && !sketch.exitCalled) {
           throw new RuntimeException(
-            "Seekprog must implement draw()"
+            "Repro4PDE must implement draw()"
           );
         }
         if (!sketch.isLooping) {
           throw new RuntimeException(
-            "Seekprog does not support noLoop()"
+            "Repro4PDE does not support noLoop()"
           );
         }
 

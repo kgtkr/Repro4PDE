@@ -1,4 +1,4 @@
-package seekprog.app;
+package repro4pde.app;
 
 import processing.mode.java.JavaBuild
 import java.awt.Color

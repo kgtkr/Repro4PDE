@@ -19,8 +19,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: Seekprog
-          path: target/scala-3.3.1/Seekprog.zip
+          name: Repro4PDE
+          path: target/scala-3.3.1/Repro4PDE.zip
   deploy:
     permissions:
       pages: write
@@ -33,11 +33,11 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v2
         with:
-          name: Seekprog
+          name: Repro4PDE
       - run: |
           mkdir pages
-          cp Seekprog.zip pages/
-          cp tool.properties pages/Seekprog.txt
+          cp Repro4PDE.zip pages/
+          cp tool.properties pages/Repro4PDE.txt
       - uses: actions/upload-pages-artifact@v2
         with:
           path: pages

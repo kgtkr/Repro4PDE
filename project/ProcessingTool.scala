@@ -24,7 +24,7 @@ class ProcessingTool(
         .filterNot(jar => jar.data.getName().contains("javafx-web"))
     }
 
-    val distDir = IO.createTemporaryDirectory / "Seekprog"
+    val distDir = IO.createTemporaryDirectory / "Repro4PDE"
 
     IO.copyFile(
       baseDirectory.value / "tool.properties",
@@ -37,7 +37,7 @@ class ProcessingTool(
     val jarDir =
       IO.copyFile(
         (toolProject / assembly).value,
-        toolDir / "Seekprog.jar"
+        toolDir / "Repro4PDE.jar"
       )
 
     val libDir = toolDir / "lib"
@@ -80,7 +80,7 @@ class ProcessingTool(
 
   lazy val buildToolTask = Def.taskDyn {
     val dir = buildToolBaseTask.value;
-    val dist = crossTarget.value / "Seekprog.zip";
+    val dist = crossTarget.value / "Repro4PDE.zip";
     val nameSrcDocs = flattenTasks(
       allProjects
         .map(p =>
@@ -126,7 +126,7 @@ class ProcessingTool(
       )
     val toolsDir = new File(properties.getProperty("PROCESSING_TOOLS_DIR"));
 
-    val toolDir = toolsDir / "SeekprogDev";
+    val toolDir = toolsDir / "Repro4PDEDev";
     if (toolDir.exists()) {
       IO.delete(toolDir)
     }
@@ -139,14 +139,14 @@ class ProcessingTool(
 
     IO.write(
       toolDir / "tool.properties",
-      "name=SeekprogDev",
+      "name=Repro4PDEDev",
       IO.utf8,
       append = true
     )
 
     IO.move(
-      toolDir / "tool" / "Seekprog.jar",
-      toolDir / "tool" / "SeekprogDev.jar"
+      toolDir / "tool" / "Repro4PDE.jar",
+      toolDir / "tool" / "Repro4PDEDev.jar"
     )
   };
 

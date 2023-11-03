@@ -1,4 +1,4 @@
-package seekprog.app;
+package repro4pde.app;
 
 import scalafx.geometry.Insets
 import scalafx.scene.Scene
@@ -22,7 +22,7 @@ import scalafx.scene.layout.VBox
 import scalafx.scene.control.Button
 import scalafx.beans.property.ObjectProperty
 import scalafx.beans.property.BooleanProperty
-import seekprog.utils.ext._;
+import repro4pde.utils.ext._;
 import scala.concurrent.Promise
 import scala.util.Success
 import scala.util.Failure
@@ -43,7 +43,7 @@ import scalafx.scene.layout.Region
 import scala.collection.mutable.Map as MMap
 import scalafx.scene.shape.SVGPath
 import scala.collection.mutable.Queue as MQueue
-import seekprog.app.EditorManager.Event
+import repro4pde.app.EditorManager.Event
 
 enum PlayerState {
   case Playing;
@@ -201,7 +201,7 @@ object ControlPanel {
         Platform.runLater(() => {
 
           val stage = new Stage {
-            title = "Seekprog"
+            title = "Repro4PDE"
             onCloseRequest = _ => {
               addQueue {
                 editorManager.send(

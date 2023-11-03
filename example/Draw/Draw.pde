@@ -28,6 +28,9 @@ void draw() {
     }
   }
   begin = newBegin;
+  if(frameCount > 300) {
+    // throw new RuntimeException();
+  }
   
 }  
 

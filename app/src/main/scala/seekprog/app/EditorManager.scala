@@ -1,4 +1,4 @@
-package seekprog.app;
+package repro4pde.app;
 
 import scala.jdk.CollectionConverters._
 import processing.mode.java.JavaBuild
@@ -27,7 +27,7 @@ import processing.app.Base
 import java.nio.file.Path
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
-import seekprog.shared.FrameState
+import repro4pde.shared.FrameState
 import processing.app.RunnerListener
 
 object EditorManager {
@@ -113,7 +113,7 @@ class EditorManager(val editor: JavaEditor) {
         val text = Source.fromFile(file).mkString;
         val newText = text.replaceFirst(
           "extends PApplet",
-          "extends seekprog.runtime.PAppletRuntime"
+          "extends repro4pde.runtime.PAppletRuntime"
         );
         file.delete();
         val writer = new PrintWriter(file);
@@ -125,7 +125,7 @@ class EditorManager(val editor: JavaEditor) {
           .toPath()
           .resolve(
             Path.of(
-              SeekprogApp.toolName,
+              Repro4PDEApp.toolName,
               "tool",
               "lib"
             )

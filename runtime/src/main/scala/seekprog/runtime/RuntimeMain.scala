@@ -1,4 +1,4 @@
-package seekprog.runtime;
+package repro4pde.runtime;
 
 import processing.core.PApplet;
 import java.nio.channels.SocketChannel
@@ -13,10 +13,10 @@ import java.nio.charset.StandardCharsets
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.channels.Channels
-import seekprog.shared.RuntimeCmd
-import seekprog.shared.RuntimeEvent
-import seekprog.shared.FrameState
-import seekprog.shared.InitParams
+import repro4pde.shared.RuntimeCmd
+import repro4pde.shared.RuntimeEvent
+import repro4pde.shared.FrameState
+import repro4pde.shared.InitParams
 
 object RuntimeMain {
   var targetFrameCount = 0;

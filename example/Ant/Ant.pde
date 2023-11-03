@@ -19,7 +19,6 @@ void draw() {
   if (state == 1) {
     if (grid[y][x]) {
       dir = (dir + 1) % 4;
-      // dir = (dir + (x + y) % 2) % 4;
     } else {
       dir = (dir + 3) % 4;
     }
@@ -35,9 +34,8 @@ void draw() {
       x--;
     }
 
-
     if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) {
-      state = 2;
+      // state = 2;
     }
   }
 

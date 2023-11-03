@@ -1,8 +1,8 @@
-package seekprog.runtime
+package repro4pde.runtime
 
-import seekprog.shared.PdeMouseEventWrapper
+import repro4pde.shared.PdeMouseEventWrapper
 import processing.event.Event
-import seekprog.shared.PdeKeyEventWrapper
+import repro4pde.shared.PdeKeyEventWrapper
 import processing.event.MouseEvent
 import processing.event.KeyEvent
 

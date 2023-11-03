@@ -1,4 +1,4 @@
-package seekprog.boot;
+package repro4pde.boot;
 
 import processing.app.tools.Tool
 import processing.app.Base
@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets
 import scala.util.chaining._
 import java.lang.reflect.Method
 
-object Seekprog {
+object Repro4PDE {
   def filterCpUrls(urls: Array[URL]) = {
     val allPlatforms = Seq(
       "linux",
@@ -56,11 +56,11 @@ object Seekprog {
   }
 }
 
-class Seekprog() extends Tool {
+class Repro4PDE() extends Tool {
   var runMethod: Method = null
 
   override def getMenuTitle() = {
-    "Seekprog"
+    "Repro4PDE"
   }
 
   override def init(base: Base) = {
@@ -87,14 +87,14 @@ class Seekprog() extends Tool {
       .readString(libDir.resolve("app-classpath.txt"), StandardCharsets.UTF_8)
       .split(",")
       .map(name => libDir.resolve(name.trim()).toUri().toURL())
-      .pipe(Seekprog.filterCpUrls)
+      .pipe(Repro4PDE.filterCpUrls)
 
     val appClass = URLClassLoader
       .newInstance(
         cp,
         javaModeLoader
       )
-      .loadClass("seekprog.app.SeekprogApp")
+      .loadClass("repro4pde.app.Repro4PDEApp")
     this.runMethod = appClass.getMethod("run");
     appClass
       .getMethod(

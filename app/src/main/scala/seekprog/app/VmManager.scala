@@ -1,4 +1,4 @@
-package seekprog.app;
+package repro4pde.app;
 
 import java.io.InputStreamReader;
 import java.util.Arrays;
@@ -22,17 +22,17 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.net.UnixDomainSocketAddress
 import java.net.StandardProtocolFamily
-import seekprog.utils.ext._;
+import repro4pde.utils.ext._;
 import scala.concurrent.Promise
 import java.nio.channels.Channels
 import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
 import com.sun.jdi.VMDisconnectedException
 import com.sun.jdi.event.VMDeathEvent
-import seekprog.shared.RuntimeCmd
-import seekprog.shared.RuntimeEvent
-import seekprog.shared.FrameState
-import seekprog.shared.InitParams
+import repro4pde.shared.RuntimeCmd
+import repro4pde.shared.RuntimeEvent
+import repro4pde.shared.FrameState
+import repro4pde.shared.InitParams
 
 object VmManager {
   enum SlaveSyncCmd {
@@ -101,9 +101,9 @@ class VmManager(
     var exitType = ExitType.Running;
 
     val sockPath = {
-      val tempDir = Files.createTempDirectory("seekprog");
+      val tempDir = Files.createTempDirectory("repro4pde");
       tempDir.toFile().deleteOnExit();
-      Path.of(tempDir.toString(), "seekprog.sock")
+      Path.of(tempDir.toString(), "repro4pde.sock")
     }
 
     val sockAddr = UnixDomainSocketAddress.of(sockPath);
@@ -229,7 +229,7 @@ class VmManager(
                           .get(0)
                           .asInstanceOf[ClassType];
                         val runtimeMainClassName =
-                          "seekprog.runtime.RuntimeMain";
+                          "repro4pde.runtime.RuntimeMain";
                         ClassClassType.invokeMethod(
                           evt.thread(),
                           ClassClassType
@@ -271,7 +271,7 @@ class VmManager(
                                   else frameStates.toList,
                                 initPaused = !running,
                                 slaveMode = slaveMode,
-                                isDebug = SeekprogApp.isDebug
+                                isDebug = Repro4PDEApp.isDebug
                               ).asJson.noSpaces
                             )
                           ),
