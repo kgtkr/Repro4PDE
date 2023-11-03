@@ -3,7 +3,6 @@ package repro4pde.app;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import com.sun.jdi.ClassType;
-import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.BreakpointEvent;
 import com.sun.jdi.event.ClassPrepareEvent;
