@@ -1,11 +1,10 @@
-int MAX_SIZE = 50 + 1; // 増やすことができる
-int MAX_COUNT = 60 * 5; // 短くすることができる
+int MAX_SIZE = 1000 + 1; // 増やすことができる
+int MAX_COUNT = 60 * 20; // 短くすることができる
 int[] xs = new int[MAX_SIZE];
 int[] ys = new int[MAX_SIZE];
 int[] count = new int[MAX_SIZE];
 int begin = 0;
 int end = 0;
-int lastDraw = 0;
 
 void setup() {
   size(600, 400);
@@ -28,18 +27,10 @@ void draw() {
     }
   }
   begin = newBegin;
-  if(frameCount > 300) {
-    // throw new RuntimeException();
-  }
   
 }  
 
 void mouseDragged() {
-  if (frameCount - lastDraw < 2) {
-    return;
-  }
-  lastDraw = frameCount;
-
   if (begin == (end + 1) % MAX_SIZE) {
     begin = (begin + 1) % MAX_SIZE;
   }
