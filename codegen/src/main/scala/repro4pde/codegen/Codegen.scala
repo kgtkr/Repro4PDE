@@ -40,7 +40,7 @@ import java.nio.file.Paths
             .getParameters()
             .map(p => s"${p.getName()}: ${toScalaType(p.getType())}")
             .mkString(", ")}) = {
-        if (RuntimeMain.sketchHandler.onTarget) {
+        if (RuntimeMain.sketchHandler.enableDraw) {
           super.${method.getName()}(${method
             .getParameters()
             .map(p => p.getName())

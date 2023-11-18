@@ -99,11 +99,10 @@ class VmManager(
   def start(done: Promise[Unit]) = {
     var exitType = ExitType.Running;
 
-    val sockPath = {
-      val tempDir = Files.createTempDirectory("repro4pde");
-      tempDir.toFile().deleteOnExit();
-      Path.of(tempDir.toString(), "repro4pde.sock")
-    }
+    val runtimeDir = Files.createTempDirectory("repro4pde");
+    runtimeDir.toFile().deleteOnExit();
+
+    val sockPath = Path.of(runtimeDir.toString(), "repro4pde.sock");
 
     val sockAddr = UnixDomainSocketAddress.of(sockPath);
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
@@ -114,7 +113,7 @@ class VmManager(
       new Runner(javaBuild, runnerListener);
 
     val vm =
-      runner.debug(Array(sockPath.toString()));
+      runner.debug(Array(runtimeDir.toString()));
 
     val classPrepareRequest =
       vm.eventRequestManager().createClassPrepareRequest();

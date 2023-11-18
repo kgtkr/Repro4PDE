@@ -19,6 +19,7 @@ class SketchHandler(
   val frameStatesBuf = Buffer[FrameState]();
   var stopReproductionEvent = false;
   var startTime = 0L;
+  var enableDraw = false;
 
   def pre() = {
     if (this.applet.frameCount == 0) {
@@ -38,6 +39,7 @@ class SketchHandler(
 
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {
       this.onTarget = true;
+      this.enableDraw = true;
       if (!RuntimeMain.slaveMode) {
         RuntimeMain.surface.enableEvent();
       }
@@ -86,6 +88,11 @@ class SketchHandler(
           )
       )
       this.frameStatesBuf.clear();
+    }
+
+    if (!this.onTarget) {
+      this.enableDraw =
+        this.applet.frameCount % 60 == 0 || this.applet.frameCount >= this.targetFrameCount - 1
     }
   }
 

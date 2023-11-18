@@ -32,6 +32,7 @@ object RuntimeMain {
   val addedFrameStatesQueue = new LinkedTransferQueue[List[FrameState]]();
   var frameCountLimit = Int.MaxValue;
   var isDebug = false;
+  var runtimeDir: Path = null;
 
   def init(
       sketch: PApplet,
@@ -52,8 +53,10 @@ object RuntimeMain {
 
     this.targetFrameCount = params.targetFrameCount;
     this.frameStates ++= params.frameStates;
+    this.runtimeDir = Path.of(sketch.args(0));
+
     this.sc = {
-      val sockPath = Path.of(sketch.args(0));
+      val sockPath = runtimeDir.resolve("repro4pde.sock");
       val sockAddr = UnixDomainSocketAddress.of(sockPath);
       val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
       sc.connect(sockAddr);

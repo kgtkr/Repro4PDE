@@ -10,14 +10,14 @@ class PGraphicsJava2DRuntime extends PGraphicsJava2DDummyImpl {
 
   override def beginDraw(): Unit = {
     super.beginDraw();
-    if (RuntimeMain.sketchHandler.onTarget) {
+    if (RuntimeMain.sketchHandler.enableDraw) {
       this.vertexCount = 0
     }
 
   }
 
   override def endDraw(): Unit = {
-    if (RuntimeMain.sketchHandler.onTarget) {
+    if (RuntimeMain.sketchHandler.enableDraw) {
       super.endDraw()
     }
   }
