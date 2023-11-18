@@ -22,7 +22,8 @@ enum RuntimeEvent {
       trimMax: Boolean,
       frameStates: List[FrameState],
       windowX: Int,
-      windowY: Int
+      windowY: Int,
+      screenshotPath: Option[String]
   );
   case OnPaused;
   case OnResumed;

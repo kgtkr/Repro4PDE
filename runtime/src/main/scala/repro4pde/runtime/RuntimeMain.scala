@@ -33,6 +33,7 @@ object RuntimeMain {
   var frameCountLimit = Int.MaxValue;
   var isDebug = false;
   var runtimeDir: Path = null;
+  var screenshotsDir: Path = null;
 
   def init(
       sketch: PApplet,
@@ -54,6 +55,7 @@ object RuntimeMain {
     this.targetFrameCount = params.targetFrameCount;
     this.frameStates ++= params.frameStates;
     this.runtimeDir = Path.of(sketch.args(0));
+    this.screenshotsDir = runtimeDir.resolve("screenshots");
 
     this.sc = {
       val sockPath = runtimeDir.resolve("repro4pde.sock");
@@ -106,6 +108,7 @@ object RuntimeMain {
     );
 
     sketch.registerMethod("pre", sketchHandler);
+    sketch.registerMethod("post", sketchHandler);
     sketch.registerMethod("mouseEvent", sketchHandler);
     sketch.registerMethod("keyEvent", sketchHandler);
   }

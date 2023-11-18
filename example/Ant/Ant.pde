@@ -55,10 +55,6 @@ void draw() {
   noStroke();
   fill(255, 0, 0);
   circle(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2);
-
-  if (frameCount > 300) {
-    throw new RuntimeException();
-  }
 }
 
 void keyPressed() {

@@ -374,7 +374,8 @@ class VmManager(
                         trimMax,
                         frameStates,
                         windowX,
-                        windowY
+                        windowY,
+                        screenshotPath
                       ) => {
                   eventListeners.foreach(
                     _(

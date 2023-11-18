@@ -20,6 +20,7 @@ class SketchHandler(
   var stopReproductionEvent = false;
   var startTime = 0L;
   var enableDraw = false;
+  var screenshotCount = 0;
 
   def pre() = {
     if (this.applet.frameCount == 0) {
@@ -76,6 +77,34 @@ class SketchHandler(
       this.currentFrameEvents.clear();
     }
 
+    if (!this.onTarget) {
+      this.enableDraw = this.applet.frameCount >= this.targetFrameCount - 1
+      if (!RuntimeMain.slaveMode) {
+        this.enableDraw |= this.applet.frameCount > 0 && this.applet.frameCount % 60 == 0;
+      }
+    }
+
+  }
+
+  def post() = {
+    val screenshotPath =
+      if (
+        !RuntimeMain.slaveMode && this.applet.frameCount > 0 && applet.frameCount % 60 == 0
+      ) {
+        val path = RuntimeMain.screenshotsDir
+          .resolve(
+            this.screenshotCount.toString() + ".png"
+          )
+          .toString();
+        this.applet.saveFrame(
+          path
+        );
+        this.screenshotCount += 1;
+        Some(path)
+      } else {
+        None
+      }
+
     if (this.onTarget /*&& this.applet.frameCount % 10 == 0*/ ) {
       RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent
@@ -84,15 +113,11 @@ class SketchHandler(
             this.stopReproductionEvent,
             this.frameStatesBuf.toList,
             this.applet.windowX,
-            this.applet.windowY
+            this.applet.windowY,
+            screenshotPath
           )
       )
       this.frameStatesBuf.clear();
-    }
-
-    if (!this.onTarget) {
-      this.enableDraw =
-        this.applet.frameCount % 60 == 0 || this.applet.frameCount >= this.targetFrameCount - 1
     }
   }
 
