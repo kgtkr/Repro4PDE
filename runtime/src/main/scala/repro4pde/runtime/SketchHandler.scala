@@ -9,6 +9,7 @@ import scala.util.Try
 import repro4pde.shared.PdeEventWrapper
 import repro4pde.shared.RuntimeEvent
 import repro4pde.shared.FrameState
+import scala.collection.mutable.{Map => MMap}
 
 class SketchHandler(
     applet: PApplet,
@@ -21,6 +22,8 @@ class SketchHandler(
   var startTime = 0L;
   var enableDraw = false;
   var screenshotCount = 0;
+  // OnTarget以前のスクリーンショット
+  val screenshotPaths = MMap[Int, String]();
 
   def pre() = {
     if (this.applet.frameCount == 0) {
@@ -52,7 +55,7 @@ class SketchHandler(
           "frameRate: " + this.targetFrameCount / ms * 1000
       );
       RuntimeMain.runtimeEventQueue.add(
-        RuntimeEvent.OnTargetFrameCount
+        RuntimeEvent.OnTargetFrameCount(this.screenshotPaths.toMap)
       )
     }
 
@@ -118,6 +121,10 @@ class SketchHandler(
           )
       )
       this.frameStatesBuf.clear();
+    } else {
+      screenshotPath.foreach { path =>
+        this.screenshotPaths += (this.applet.frameCount -> path);
+      }
     }
   }
 

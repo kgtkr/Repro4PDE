@@ -44,6 +44,12 @@ import scala.collection.mutable.Map as MMap
 import scalafx.scene.shape.SVGPath
 import scala.collection.mutable.Queue as MQueue
 import repro4pde.app.EditorManager.Event
+import scala.collection.SortedMap
+import scalafx.scene.image.Image
+import scala.collection.mutable.Set as MSet
+import scalafx.stage.Popup
+import scalafx.scene.image.ImageView
+import scalafx.beans.property.DoubleProperty
 
 enum PlayerState {
   case Playing;
@@ -94,6 +100,69 @@ object ControlPanel {
         val slaveBuildProperty = ObjectProperty[Option[Build]](None);
         val diffNodeProperty = ObjectProperty[Region](new VBox());
         val slaveErrorProperty = ObjectProperty[Option[String]](None);
+        val screenshotsProperty = ObjectProperty[SortedMap[
+          Int,
+          Image
+        ]](SortedMap.empty[Int, Image]);
+        val sliderValueProperty =
+          ObjectProperty[Option[Int]](None);
+        val screenshotProperty =
+          Bindings.createObjectBinding[Option[Image]](
+            () => {
+              sliderValueProperty.value
+                .flatMap(value => {
+                  val nearest = findNearest(
+                    screenshotsProperty.value,
+                    value
+                  );
+                  nearest.map({
+                    case (_, image) => {
+                      image
+                    }
+                  })
+                })
+            },
+            sliderValueProperty,
+            screenshotsProperty
+          )
+        var screenshotPaths = SortedMap.empty[Int, String]
+        val screenshotXProperty = DoubleProperty(0)
+        val screenshotYProperty = DoubleProperty(0)
+        val loadingScreenshotValues = MSet.empty[Int]
+        sliderValueProperty.onChange { (_, _, _) =>
+          sliderValueProperty.value
+            .flatMap(value =>
+              findNearest(
+                screenshotPaths,
+                value
+              )
+            )
+            .foreach({
+              case (nearestValue, path) => {
+                if (
+                  !screenshotsProperty.value.contains(
+                    nearestValue
+                  ) && !loadingScreenshotValues.contains(
+                    nearestValue
+                  )
+                ) {
+                  new Image(
+                    s"file:${path}",
+                    true
+                  ) {
+                    progress.onChange { (_, _, _) =>
+                      if (progress.value == 1.0) {
+                        loadingScreenshotValues -= nearestValue
+                        screenshotsProperty.value =
+                          screenshotsProperty.value + (nearestValue -> this)
+                      }
+                    }
+                  }
+                  loadingScreenshotValues += nearestValue
+                }
+              }
+            })
+        }
 
         def updateDiffNodeProperty() = {
           (slaveBuildProperty.value, currentBuildProperty.value) match {
@@ -229,6 +298,19 @@ object ControlPanel {
                           alignment = Pos.Center
                           val slider = new Slider(0, 0, 0) {
                             disable <== loading
+                            onMouseMoved = e => {
+                              val mouseX = if e.getX.isNaN then 0 else e.getX
+                              val mouseValue =
+                                (mouseX / width.value) * (max.value - min.value) + min.value
+                              sliderValueProperty.value = Some(
+                                (mouseValue * 60).toInt
+                              )
+                              screenshotXProperty.value = e.getScreenX
+                              screenshotYProperty.value = e.getScreenY
+                            }
+                            onMouseExited = _ => {
+                              sliderValueProperty.value = None
+                            }
                             valueChanging.addListener({
                               (_, oldChanging, changing) =>
                                 if (
@@ -282,6 +364,14 @@ object ControlPanel {
                                     slaveErrorProperty.value = Some(error)
                                   }
                                 }
+                                case Event.AddedScreenshots(
+                                      added
+                                    ) => {
+                                  screenshotPaths ++= added
+                                }
+                                case Event.ClearedScreenshots() => {
+                                  screenshotPaths = SortedMap.empty[Int, String]
+                                }
                               }
                             }
                           };
@@ -298,6 +388,39 @@ object ControlPanel {
                               )
                             }
                           )
+
+                          new Popup {
+                            content += new ImageView {
+                              image <== Bindings.createObjectBinding(
+                                () => {
+                                  screenshotProperty.value
+                                    .map(_.delegate)
+                                    .orNull
+                                },
+                                screenshotProperty
+                              )
+                              fitWidth = 150
+                              preserveRatio = true
+                            }
+                            screenshotProperty.onChange { (_, oldV, newV) =>
+                              val oldDefined = oldV.isDefined
+                              val newDefined = newV.isDefined
+                              if (oldDefined != newDefined) {
+                                if (newDefined) {
+                                  this.show(
+                                    slider.getScene.getWindow,
+                                    screenshotXProperty.value - 75,
+                                    screenshotYProperty.value + 20
+                                  )
+                                } else {
+                                  hide()
+                                }
+                              }
+                            }
+                            screenshotXProperty.onChange { (_, _, _) =>
+                              this.setX(screenshotXProperty.value - 75)
+                            }
+                          };
                         },
                         new HBox(10) {
                           alignment = Pos.Center
@@ -745,6 +868,40 @@ object ControlPanel {
           prefWidth <== sp.width
           children = deletedFiles ++ createdFiles ++ changedFiles
           style = "-fx-font: normal 10pt monospace"
+        }
+      }
+    }
+  }
+
+  private def findNearest[A](
+      map: SortedMap[Int, A],
+      key: Int
+  ): Option[(Int, A)] = {
+    map.get(key) match {
+      case Some(value) => {
+        Some((key, value))
+      }
+      case None => {
+        val maxBefore = map.maxBefore(key);
+        val minAfter = map.minAfter(key);
+
+        (maxBefore, minAfter) match {
+          case (Some((key1, value1)), Some((key2, value2))) => {
+            if (key - key1 < key2 - key) {
+              Some((key1, value1))
+            } else {
+              Some((key2, value2))
+            }
+          }
+          case (Some((key1, value1)), None) => {
+            Some((key1, value1))
+          }
+          case (None, Some((key2, value2))) => {
+            Some((key2, value2))
+          }
+          case (None, None) => {
+            None
+          }
         }
       }
     }

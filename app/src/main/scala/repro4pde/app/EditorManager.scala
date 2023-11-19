@@ -55,6 +55,8 @@ object EditorManager {
     case CreatedBuild(build: Build);
     case ClearLog();
     case LogError(slaveId: Option[Int], error: String);
+    case AddedScreenshots(screenshotPaths: Map[Int, String]);
+    case ClearedScreenshots();
   }
 
   class SlaveVm(
@@ -240,6 +242,7 @@ class EditorManager(val editor: JavaEditor) {
     assert(oMasterVm.isEmpty);
     editor.statusEmpty();
     eventListeners.foreach(_(Event.ClearLog()));
+    eventListeners.foreach(_(Event.ClearedScreenshots()));
 
     val slaveVms = MMap[Int, SlaveVm](
       slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
@@ -686,6 +689,11 @@ class EditorManager(val editor: JavaEditor) {
       case VmManager.Event.Stopped() => {
         this.eventListeners.foreach(_(Event.Stopped(this.running)))
       }
+      case VmManager.Event.AddedScreenshots(screenshotPaths) => {
+        this.eventListeners.foreach(
+          _(Event.AddedScreenshots(screenshotPaths))
+        )
+      }
     }
   }
 
@@ -706,6 +714,7 @@ class EditorManager(val editor: JavaEditor) {
       case VmManager.Event.Stopped() => {
         updateSlaveVms();
       }
+      case VmManager.Event.AddedScreenshots(_) => {}
     }
   }
 

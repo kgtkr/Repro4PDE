@@ -16,7 +16,9 @@ object RuntimeEvent {
 }
 
 enum RuntimeEvent {
-  case OnTargetFrameCount;
+  case OnTargetFrameCount(
+      screenshotPaths: Map[Int, String]
+  )
   case OnUpdateLocation(
       frameCount: Int,
       trimMax: Boolean,

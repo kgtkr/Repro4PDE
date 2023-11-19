@@ -32,7 +32,6 @@ import repro4pde.shared.RuntimeCmd
 import repro4pde.shared.RuntimeEvent
 import repro4pde.shared.FrameState
 import repro4pde.shared.InitParams
-
 object VmManager {
   enum SlaveSyncCmd {
     case AddedEvents(frameStates: List[FrameState]);
@@ -58,6 +57,7 @@ object VmManager {
         windowY: Int
     );
     case Stopped();
+    case AddedScreenshots(screenshotPaths: Map[Int, String]);
   }
 
   enum Task {
@@ -357,9 +357,16 @@ class VmManager(
             }
             case TRuntimeEvent(event) => {
               event match {
-                case RuntimeEvent.OnTargetFrameCount => {
+                case RuntimeEvent.OnTargetFrameCount(screenshotPaths) => {
                   progressCmd match {
                     case Some(Cmd.StartSketch(done)) => {
+                      eventListeners.foreach(
+                        _(
+                          Event.AddedScreenshots(
+                            screenshotPaths
+                          )
+                        )
+                      )
                       progressCmd = None;
                       done.success(());
                     }
@@ -377,6 +384,15 @@ class VmManager(
                         windowY,
                         screenshotPath
                       ) => {
+                  screenshotPath.foreach { path =>
+                    eventListeners.foreach(
+                      _(
+                        Event.AddedScreenshots(
+                          Map(frameCount -> path)
+                        )
+                      )
+                    )
+                  }
                   eventListeners.foreach(
                     _(
                       Event.UpdateLocation(
