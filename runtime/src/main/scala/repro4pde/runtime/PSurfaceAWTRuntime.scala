@@ -75,7 +75,7 @@ class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
           RuntimeMain.sketchHandler.pre();
         }
         sketch.handleDraw();
-        if (RuntimeMain.sketchHandler.enableDraw) {
+        if (RuntimeMain.sketchHandler.enableRender) {
           render();
         }
       }

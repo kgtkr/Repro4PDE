@@ -20,10 +20,14 @@ class SketchHandler(
   val frameStatesBuf = Buffer[FrameState]();
   var stopReproductionEvent = false;
   var startTime = 0L;
+  // screenshot目的だけであれば enableDraw=true, enableRender=false になる
   var enableDraw = false;
+  var enableRender = false;
   var screenshotCount = 0;
   // OnTarget以前のスクリーンショット
   val screenshotPaths = MMap[Int, String]();
+  var enableScreenshot = false;
+  var prevScreenshotFrameCount = 0;
 
   def pre() = {
     if (this.applet.frameCount == 0) {
@@ -44,6 +48,7 @@ class SketchHandler(
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {
       this.onTarget = true;
       this.enableDraw = true;
+      this.enableRender = true;
       if (!RuntimeMain.slaveMode) {
         RuntimeMain.surface.enableEvent();
       }
@@ -80,10 +85,27 @@ class SketchHandler(
       this.currentFrameEvents.clear();
     }
 
+    if (!RuntimeMain.slaveMode && this.applet.frameCount > 0) {
+      // 合計枚数を抑えるため時間が経つほど徐々にスクショ頻度を下げる
+      val waitFrameCount =
+        60 max (RuntimeMain.targetFrameCount / 10) max (this.applet.frameCount / 10);
+      if (
+        this.applet.frameCount >= this.prevScreenshotFrameCount + waitFrameCount
+      ) {
+        this.enableScreenshot = true;
+        this.prevScreenshotFrameCount = this.applet.frameCount;
+      } else {
+        this.enableScreenshot = false;
+      }
+    }
+
     if (!this.onTarget) {
-      this.enableDraw = this.applet.frameCount >= this.targetFrameCount - 1
-      if (!RuntimeMain.slaveMode) {
-        this.enableDraw |= this.applet.frameCount > 0 && this.applet.frameCount % 60 == 0;
+      // onTargetの1フレーム前も描画する
+      if (this.applet.frameCount >= this.targetFrameCount - 1) {
+        this.enableDraw = true;
+        this.enableRender = true;
+      } else if (!RuntimeMain.slaveMode) {
+        this.enableDraw = this.enableScreenshot;
       }
     }
 
@@ -91,9 +113,7 @@ class SketchHandler(
 
   def post() = {
     val screenshotPath =
-      if (
-        !RuntimeMain.slaveMode && this.applet.frameCount > 0 && applet.frameCount % 60 == 0
-      ) {
+      if (this.enableScreenshot) {
         val path = RuntimeMain.screenshotsDir
           .resolve(
             this.screenshotCount.toString() + ".png"
