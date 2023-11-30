@@ -96,6 +96,7 @@ class EditorManager(val editor: JavaEditor) {
   var masterLocation: Option[java.awt.Point] = None;
   val slaveLocations: MMap[Int, java.awt.Point] = MMap();
   val styles = new PdeTextAreaDefaults().styles;
+  var prevCodes = Map[String, String]();
 
   private def updateBuild() = {
     editor.statusEmpty();
@@ -421,31 +422,46 @@ class EditorManager(val editor: JavaEditor) {
   private def processCmd(cmd: Cmd): Unit = {
     cmd match {
       case Cmd.ReloadSketch(done) => {
-        try {
-          this.updateBuild();
-        } catch {
-          case e: Exception => {
-            done.failure(e);
-            return;
+        val newCodes = editor
+          .getSketch()
+          .getCode()
+          .map { code =>
+            val name = code.getFile().toString();
+            val text = code.getProgram();
+            (name, text)
+          }
+          .toMap;
+        if (newCodes == prevCodes) {
+          done.success(())
+        } else {
+          prevCodes = newCodes;
+          try {
+            this.updateBuild();
+          } catch {
+            case e: Exception => {
+              done.failure(e);
+              return;
+            }
+          }
+
+          oMasterVm match {
+            case Some(_) => {
+              Await.ready(
+                done
+                  .completeWith(for {
+                    _ <- exitVm()
+                    _ <- startVm()
+                  } yield ())
+                  .future,
+                Duration.Inf
+              )
+            }
+            case None => {
+              done.success(())
+            }
           }
         }
 
-        oMasterVm match {
-          case Some(_) => {
-            Await.ready(
-              done
-                .completeWith(for {
-                  _ <- exitVm()
-                  _ <- startVm()
-                } yield ())
-                .future,
-              Duration.Inf
-            )
-          }
-          case None => {
-            done.success(())
-          }
-        }
       }
       case Cmd.UpdateLocation(frameCount, done) => {
         oMasterVm match {
