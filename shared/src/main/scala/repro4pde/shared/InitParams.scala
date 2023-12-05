@@ -7,7 +7,8 @@ case class InitParams(
     frameStates: List[FrameState],
     initPaused: Boolean,
     slaveMode: Boolean,
-    isDebug: Boolean
+    isDebug: Boolean,
+    randomSeed: Long
 )
 
 object InitParams {

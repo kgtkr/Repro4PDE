@@ -34,6 +34,7 @@ object RuntimeMain {
   var isDebug = false;
   var runtimeDir: Path = null;
   var screenshotsDir: Path = null;
+  var randomSeed = 0L;
 
   def init(
       sketch: PApplet,
@@ -44,6 +45,7 @@ object RuntimeMain {
     this.slaveMode = params.slaveMode;
     this.notTriggerPausedEvent = params.initPaused;
     this.isDebug = params.isDebug;
+    this.randomSeed = params.randomSeed;
     val renderer = classOf[PGraphicsJava2DRuntime].getName();
     Class.forName(renderer);
     {

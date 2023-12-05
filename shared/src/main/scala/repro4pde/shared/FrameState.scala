@@ -3,8 +3,7 @@ package repro4pde.shared
 import io.circe._, io.circe.generic.semiauto._
 
 case class FrameState(
-    events: List[PdeEventWrapper],
-    randomSeed: Long
+    events: List[PdeEventWrapper]
 )
 
 object FrameState {

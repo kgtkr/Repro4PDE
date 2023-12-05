@@ -83,7 +83,8 @@ class VmManager(
     val runnerListener: RunnerListener,
     val targetFrameCount: Int,
     val defaultRunning: Boolean,
-    val frameStates: List[FrameState]
+    val frameStates: List[FrameState],
+    val randomSeed: Long
 ) {
   import VmManager._;
 
@@ -269,7 +270,8 @@ class VmManager(
                                   else frameStates.toList,
                                 initPaused = !running,
                                 slaveMode = slaveMode,
-                                isDebug = Repro4PDEApp.isDebug
+                                isDebug = Repro4PDEApp.isDebug,
+                                randomSeed = randomSeed
                               ).asJson.noSpaces
                             )
                           ),

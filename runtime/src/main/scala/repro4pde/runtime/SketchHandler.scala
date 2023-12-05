@@ -43,6 +43,7 @@ class SketchHandler(
       }
 
       RuntimeMain.surface.disableEvent();
+      this.applet.randomSeed(RuntimeMain.randomSeed);
     }
 
     if (!this.onTarget && this.applet.frameCount >= this.targetFrameCount) {
@@ -66,8 +67,8 @@ class SketchHandler(
 
     if (!this.stopReproductionEvent) {
       Try(RuntimeMain.frameStates(this.applet.frameCount)).toOption
-        .foreach {
-          _.events.foreach {
+        .foreach { frameState =>
+          frameState.events.foreach {
             case PdeEventWrapper.Mouse(evt) =>
               this.applet.postEvent(ReproductionEvent.mouseEventToPde(evt));
             case PdeEventWrapper.Key(evt) =>
@@ -78,9 +79,7 @@ class SketchHandler(
 
     if (this.onTarget) {
       this.frameStatesBuf += FrameState(
-        events = this.currentFrameEvents.toList,
-        // TODO: randomSeed
-        randomSeed = 0
+        events = this.currentFrameEvents.toList
       )
       this.currentFrameEvents.clear();
     }

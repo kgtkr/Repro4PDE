@@ -29,6 +29,7 @@ import java.nio.file.Files
 import java.nio.charset.StandardCharsets
 import repro4pde.shared.FrameState
 import processing.app.RunnerListener
+import java.util.Random
 
 object EditorManager {
   enum Cmd {
@@ -97,6 +98,8 @@ class EditorManager(val editor: JavaEditor) {
   val slaveLocations: MMap[Int, java.awt.Point] = MMap();
   val styles = new PdeTextAreaDefaults().styles;
   var prevCodes = Map[String, String]();
+  val random = new Random();
+  var randomSeed = random.nextLong();
 
   private def updateBuild() = {
     editor.statusEmpty();
@@ -268,7 +271,8 @@ class EditorManager(val editor: JavaEditor) {
       },
       targetFrameCount = this.frameCount,
       defaultRunning = this.running,
-      frameStates = this.frameStates.toList
+      frameStates = this.frameStates.toList,
+      randomSeed = this.randomSeed
     );
     val vmms = new MasterVm(masterVmManager, slaveVms);
     masterVmManager.listen { event =>
@@ -337,7 +341,8 @@ class EditorManager(val editor: JavaEditor) {
         },
         targetFrameCount = this.frameCount,
         defaultRunning = true,
-        frameStates = this.frameStates.toList
+        frameStates = this.frameStates.toList,
+        randomSeed = this.randomSeed
       ),
       buildId,
       this.frameCount + 1
