@@ -241,15 +241,18 @@ object ControlPanel {
                         if (!editorManager.config.disableAutoReload) {
                           addQueue {
                             editorManager.send(
-                              EditorManager.Cmd.ReloadSketch(donePromise {
-                                if (
-                                  playerState.value == PlayerState.Stopped(
-                                    true
-                                  )
-                                ) {
-                                  playerState.value = PlayerState.Playing;
-                                }
-                              })
+                              EditorManager.Cmd.ReloadSketch(
+                                donePromise {
+                                  if (
+                                    playerState.value == PlayerState.Stopped(
+                                      true
+                                    )
+                                  ) {
+                                    playerState.value = PlayerState.Playing;
+                                  }
+                                },
+                                false
+                              )
                             )
                           }
                         }
@@ -535,32 +538,6 @@ object ControlPanel {
                                         )
                                       }
                                     }
-                                  }
-                                }
-
-                              }
-                            },
-                            new Button {
-                              text = Locale.locale.reload
-                              disable <== loading
-                              onAction = _ => {
-                                if (!loading.value) {
-                                  addQueue {
-                                    editorManager.send(
-                                      EditorManager.Cmd.ReloadSketch(
-                                        donePromise {
-                                          if (
-                                            playerState.value == PlayerState
-                                              .Stopped(
-                                                true
-                                              )
-                                          ) {
-                                            playerState.value =
-                                              PlayerState.Playing;
-                                          }
-                                        }
-                                      )
-                                    )
                                   }
                                 }
 

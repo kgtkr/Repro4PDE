@@ -35,7 +35,7 @@ object EditorManager {
   enum Cmd {
     val done: Promise[Unit];
 
-    case ReloadSketch(done: Promise[Unit])
+    case ReloadSketch(done: Promise[Unit], force: Boolean)
     case UpdateLocation(
         frameCount: Int,
         done: Promise[Unit]
@@ -429,7 +429,7 @@ class EditorManager(val editor: JavaEditor) {
 
   private def processCmd(cmd: Cmd): Unit = {
     cmd match {
-      case Cmd.ReloadSketch(done) => {
+      case Cmd.ReloadSketch(done, force) => {
         val newCodes = editor
           .getSketch()
           .getCode()
@@ -439,7 +439,7 @@ class EditorManager(val editor: JavaEditor) {
             (name, text)
           }
           .toMap;
-        if (newCodes == prevCodes) {
+        if (newCodes == prevCodes && !force) {
           done.success(())
         } else {
           prevCodes = newCodes;
@@ -511,6 +511,12 @@ class EditorManager(val editor: JavaEditor) {
             try {
               this.updateBuild();
               running = true;
+              if (config.disableRepro) {
+                frameCount = 0;
+                maxFrameCount = 0;
+                frameStates.clear();
+                randomSeed = random.nextLong();
+              }
               Await.ready(
                 done
                   .completeWith(startVm())
