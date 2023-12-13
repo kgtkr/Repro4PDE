@@ -86,7 +86,7 @@ class EditorManager(val editor: JavaEditor) {
 
   val taskQueue = new LinkedTransferQueue[Task]();
   var eventListeners = List[Event => Unit]();
-  val config = Config.loadConfig(Base.getSketchbookFolder());
+  val config = Config.loadConfig(editor.getSketch().getFolder());
 
   var frameCount = 0;
   var maxFrameCount = 0;

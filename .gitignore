@@ -33,3 +33,5 @@ metals.sbt
 
 #
 /dev.properties
+
+repro4pde-*.log
