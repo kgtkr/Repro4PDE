@@ -238,19 +238,22 @@ object ControlPanel {
                   case filename: Path => {
                     if (filename.toString().endsWith(".pde")) {
                       Platform.runLater {
-                        addQueue {
-                          editorManager.send(
-                            EditorManager.Cmd.ReloadSketch(donePromise {
-                              if (
-                                playerState.value == PlayerState.Stopped(
-                                  true
-                                )
-                              ) {
-                                playerState.value = PlayerState.Playing;
-                              }
-                            })
-                          )
+                        if (!editorManager.config.disableAutoReload) {
+                          addQueue {
+                            editorManager.send(
+                              EditorManager.Cmd.ReloadSketch(donePromise {
+                                if (
+                                  playerState.value == PlayerState.Stopped(
+                                    true
+                                  )
+                                ) {
+                                  playerState.value = PlayerState.Playing;
+                                }
+                              })
+                            )
+                          }
                         }
+
                       }
                     }
                   }
@@ -490,6 +493,95 @@ object ControlPanel {
                               }
                             },
                             new Button {
+                              val SIZE = 25;
+                              prefWidth = SIZE
+                              prefHeight = SIZE
+                              minWidth = SIZE
+                              minHeight = SIZE
+                              graphic = new SVGPath {
+                                scaleX = 0.015
+                                scaleY = 0.015
+                                content = SVGResources.stop
+                                fill = Black
+                              }
+                              disable <== Bindings.createBooleanBinding(
+                                () =>
+                                  loading.value || (playerState.value match {
+                                    case PlayerState.Stopped(_) => true
+                                    case _                      => false
+                                  }),
+                                loading,
+                                playerState
+                              )
+                              onAction = _ => {
+                                if (!loading.value) {
+                                  addQueue {
+                                    playerState.value match {
+                                      case PlayerState.Stopped(_) => {}
+                                      case _ => {
+                                        editorManager.send(
+                                          EditorManager.Cmd.StopSketch(
+                                            donePromise {
+                                              playerState.value =
+                                                PlayerState.Stopped(
+                                                  false
+                                                );
+                                            }
+                                          )
+                                        )
+                                      }
+                                    }
+                                  }
+                                }
+
+                              }
+                            },
+                            new Button {
+                              text = Locale.locale.reload
+                              disable <== loading
+                              onAction = _ => {
+                                if (!loading.value) {
+                                  addQueue {
+                                    editorManager.send(
+                                      EditorManager.Cmd.ReloadSketch(
+                                        donePromise {
+                                          if (
+                                            playerState.value == PlayerState
+                                              .Stopped(
+                                                true
+                                              )
+                                          ) {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
+                                        }
+                                      )
+                                    )
+                                  }
+                                }
+
+                              }
+                            },
+                            new Button {
+                              text = Locale.locale.regenerateState
+                              disable <== loading
+                              onAction = _ => {
+                                if (!loading.value) {
+                                  addQueue {
+                                    editorManager.send(
+                                      EditorManager.Cmd.RegenerateState(
+                                        donePromise()
+                                      )
+                                    )
+                                  }
+                                }
+
+                              }
+                            }
+                          )
+
+                          if (!editorManager.config.disableComparison) {
+                            children += new Button {
                               text <== Bindings.createStringBinding(
                                 () =>
                                   if (slaveBuildProperty.value.isDefined) {
@@ -540,8 +632,9 @@ object ControlPanel {
                                 }
 
                               }
-                            }
-                          )
+                            };
+
+                          }
                         }
                       )
                     },

@@ -13,6 +13,8 @@ object Locale {
     val changed = "changed";
     val unchanged = "unchanged";
     val slaveError = "An error occurred in the past sketch";
+    val reload = "Reload";
+    val regenerateState = "Regenerate random seed";
   };
   val locales = Map(
     "en" -> defaultLocale,
@@ -25,6 +27,8 @@ object Locale {
       val changed = "変更";
       val unchanged = "変更がありません";
       val slaveError = "過去のスケッチでエラーが発生しました";
+      val reload = "再読み込み";
+      val regenerateState = "乱数を再生成";
     }
   );
   val locale = locales.getOrElse(lang, defaultLocale);
@@ -39,4 +43,6 @@ abstract class Locale {
   val changed: String;
   val unchanged: String;
   val slaveError: String;
+  val reload: String;
+  val regenerateState: String;
 }

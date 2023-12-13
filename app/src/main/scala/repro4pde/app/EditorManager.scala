@@ -44,10 +44,12 @@ object EditorManager {
     case PauseSketch(done: Promise[Unit])
     case ResumeSketch(done: Promise[Unit])
     // TODO: このコマンドを送るUI実装
-    case Stop(done: Promise[Unit])
+    case StopSketch(done: Promise[Unit])
     case Exit(done: Promise[Unit])
     case AddSlave(id: Int, done: Promise[Unit])
     case RemoveSlave(id: Int, done: Promise[Unit])
+    case RegenerateState(done: Promise[Unit])
+
   }
 
   enum Event {
@@ -84,6 +86,7 @@ class EditorManager(val editor: JavaEditor) {
 
   val taskQueue = new LinkedTransferQueue[Task]();
   var eventListeners = List[Event => Unit]();
+  val config = Config.loadConfig(Base.getSketchbookFolder());
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -560,7 +563,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.Stop(done) => {
+      case Cmd.StopSketch(done) => {
         oMasterVm match {
           case None => {
             done.failure(new Exception("vm is not running"));
@@ -654,6 +657,10 @@ class EditorManager(val editor: JavaEditor) {
             }
           }
         }
+      }
+      case Cmd.RegenerateState(done) => {
+        randomSeed = random.nextLong();
+        done.success(());
       }
     }
   }
