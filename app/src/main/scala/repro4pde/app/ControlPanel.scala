@@ -300,7 +300,11 @@ object ControlPanel {
                         new HBox {
                           alignment = Pos.Center
                           val slider = new Slider(0, 0, 0) {
-                            disable <== loading
+                            disable <== Bindings.createBooleanBinding(
+                              () =>
+                                loading.value && !editorManager.config.disableRepro,
+                              loading
+                            )
                             onMouseMoved = e => {
                               val mouseX = if e.getX.isNaN then 0 else e.getX
                               val mouseValue =
@@ -317,7 +321,7 @@ object ControlPanel {
                             valueChanging.addListener({
                               (_, oldChanging, changing) =>
                                 if (
-                                  oldChanging && !changing && !loading.value
+                                  oldChanging && !changing && !loading.value && !editorManager.config.disableRepro
                                 ) {
                                   addQueue {
                                     editorManager.send(
