@@ -20,9 +20,10 @@ object LogEntry {
 
 enum LogPayload {
   case Init()
-  case Play()
-  case Reload(sources: List[(String, String)])
+  case Start(sources: List[(String, String)])
   case Pause()
+  case Resume()
+  case Stop()
 }
 
 object LogPayload {

@@ -510,6 +510,7 @@ class EditorManager(val editor: JavaEditor) {
           case None => {
             try {
               this.updateBuild();
+              this.config.log(LogPayload.Start(prevCodes.toList));
               running = true;
               if (config.disableRepro) {
                 frameCount = 0;
@@ -534,6 +535,7 @@ class EditorManager(val editor: JavaEditor) {
       case Cmd.PauseSketch(done) => {
         oMasterVm match {
           case Some(masterVm) => {
+            this.config.log(LogPayload.Pause());
             Await.ready(
               {
                 masterVm.vmManager.send(
@@ -553,6 +555,7 @@ class EditorManager(val editor: JavaEditor) {
       case Cmd.ResumeSketch(done) => {
         oMasterVm match {
           case Some(masterVm) => {
+            this.config.log(LogPayload.Resume());
             Await.ready(
               {
                 masterVm.vmManager.send(
@@ -575,6 +578,7 @@ class EditorManager(val editor: JavaEditor) {
             done.failure(new Exception("vm is not running"));
           }
           case Some(_) => {
+            this.config.log(LogPayload.Stop());
             Await.ready(
               done
                 .completeWith(exitVm())
