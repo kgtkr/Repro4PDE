@@ -488,7 +488,8 @@ class EditorManager(val editor: JavaEditor) {
             )
           }
           case None => {
-            done.failure(new Exception("vm is not running"));
+            this.frameCount = frameCount;
+            done.complete(());
           }
         }
       }
