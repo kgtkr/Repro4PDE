@@ -489,7 +489,7 @@ class EditorManager(val editor: JavaEditor) {
           }
           case None => {
             this.frameCount = frameCount;
-            done.complete(());
+            done.success(());
           }
         }
       }
