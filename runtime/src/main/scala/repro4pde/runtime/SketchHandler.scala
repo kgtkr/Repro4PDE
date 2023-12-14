@@ -60,6 +60,10 @@ class SketchHandler(
           "targetFrameCount: " + this.targetFrameCount + ", " +
           "frameRate: " + this.targetFrameCount / ms * 1000
       );
+      // コンソールリセットのため(よりよい方法が欲しい)
+      for (i <- 0 until 100) {
+        println();
+      }
       RuntimeMain.runtimeEventQueue.add(
         RuntimeEvent.OnTargetFrameCount(this.screenshotPaths.toMap)
       )
