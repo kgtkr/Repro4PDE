@@ -452,19 +452,19 @@ class EditorManager(val editor: JavaEditor) {
             .toMap;
           if (newCodes == prevCodes && !force) {
             boundary.break(())
-          } else {
-            prevCodes = newCodes;
-            blocking {
-              this.updateBuild()
-            }
+          }
 
-            oMasterVm match {
-              case Some(_) => {
-                await(exitVm())
-                await(startVm())
-              }
-              case None => {}
+          prevCodes = newCodes;
+          blocking {
+            this.updateBuild()
+          }
+
+          oMasterVm match {
+            case Some(_) => {
+              await(exitVm())
+              await(startVm())
             }
+            case None => {}
           }
 
         }
