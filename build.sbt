@@ -24,7 +24,8 @@ lazy val sharedSettings = Seq(
     "-Wunused:all"
   ),
   run / fork := true,
-  connectInput := true
+  connectInput := true,
+  libraryDependencies += "com.github.rssh" %% "dotty-cps-async" % "0.9.19"
 );
 
 lazy val codegenProject = project

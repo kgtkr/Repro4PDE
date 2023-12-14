@@ -30,6 +30,9 @@ import java.nio.charset.StandardCharsets
 import repro4pde.shared.FrameState
 import processing.app.RunnerListener
 import java.util.Random
+import cps.*
+import cps.monads.{*, given}
+import scala.util.boundary
 
 object EditorManager {
   enum Cmd {
@@ -413,7 +416,14 @@ class EditorManager(val editor: JavaEditor) {
       while (!isExit) {
         val task = taskQueue.take();
         task match {
-          case TCmd(cmd)                 => processCmd(cmd)
+          case TCmd(cmd) => {
+            Await.ready(
+              cmd.done
+                .completeWith(processCmd(cmd))
+                .future,
+              Duration.Inf
+            )
+          }
           case TMasterEvent(vmms, event) => processMasterEvent(vmms, event)
           case TSlaveEvent(slaveVm, event) => {
             processSlaveEvent(slaveVm, event)
@@ -427,89 +437,64 @@ class EditorManager(val editor: JavaEditor) {
     }).start();
   }
 
-  private def processCmd(cmd: Cmd): Unit = {
+  private def processCmd(cmd: Cmd): Future[Unit] = async[Future] {
     cmd match {
-      case Cmd.ReloadSketch(done, force) => {
-        val newCodes = editor
-          .getSketch()
-          .getCode()
-          .map { code =>
-            val name = code.getFile().toString();
-            val text = code.getProgram();
-            (name, text)
-          }
-          .toMap;
-        if (newCodes == prevCodes && !force) {
-          done.success(())
-        } else {
-          prevCodes = newCodes;
-          try {
-            this.updateBuild();
-          } catch {
-            case e: Exception => {
-              done.failure(e);
-              return;
+      case Cmd.ReloadSketch(_, force) =>
+        boundary {
+          val newCodes = editor
+            .getSketch()
+            .getCode()
+            .map { code =>
+              val name = code.getFile().toString();
+              val text = code.getProgram();
+              (name, text)
+            }
+            .toMap;
+          if (newCodes == prevCodes && !force) {
+            boundary.break(())
+          } else {
+            prevCodes = newCodes;
+            blocking {
+              this.updateBuild()
+            }
+
+            oMasterVm match {
+              case Some(_) => {
+                await(exitVm())
+                await(startVm())
+              }
+              case None => {}
             }
           }
 
-          oMasterVm match {
-            case Some(_) => {
-              Await.ready(
-                done
-                  .completeWith(for {
-                    _ <- exitVm()
-                    _ <- startVm()
-                  } yield ())
-                  .future,
-                Duration.Inf
-              )
-            }
-            case None => {
-              done.success(())
-            }
-          }
         }
-
-      }
-      case Cmd.UpdateLocation(frameCount, done) => {
+      case Cmd.UpdateLocation(frameCount, _) => {
         oMasterVm match {
           case Some(_) => {
-            Await.ready(
-              done
-                .completeWith(for {
-                  _ <- exitVm()
-                  _ <- Future {
-                    this.frameCount = frameCount;
-                  }
-                  _ <- startVm()
-                } yield ())
-                .future,
-              Duration.Inf
-            )
+            await(exitVm())
+            this.frameCount = frameCount;
+            await(startVm())
           }
           case None => {
             this.frameCount = frameCount;
-            done.success(());
           }
         }
       }
-      case Cmd.StartSketch(done) => {
+      case Cmd.StartSketch(_) => {
         oMasterVm match {
           case Some(masterVm) if masterVm.vmManager.isExited => {
-            Await.ready(
-              exitVm(),
-              Duration.Inf
-            )
+            await(exitVm())
+            // TODO: oMasterVm = None; ?
           }
           case _ => {}
         }
 
         oMasterVm match {
           case Some(_) => {
-            done.failure(new Exception("vm is already running"));
+            throw new Exception("vm is already running")
           }
           case None => {
-            try {
+            blocking {
               editor.prepareRun();
               this.updateBuild();
               this.config.log(
@@ -525,164 +510,112 @@ class EditorManager(val editor: JavaEditor) {
                     .toList
                 )
               );
-              running = true;
-              if (config.disableRepro) {
-                frameCount = 0;
-                maxFrameCount = 0;
-                frameStates.clear();
-                randomSeed = random.nextLong();
-              }
-              Await.ready(
-                done
-                  .completeWith(startVm())
-                  .future,
-                Duration.Inf
-              )
-            } catch {
-              case e: Exception => {
-                done.failure(e);
-              }
             }
+
+            running = true;
+            if (config.disableRepro) {
+              frameCount = 0;
+              maxFrameCount = 0;
+              frameStates.clear();
+              randomSeed = random.nextLong();
+            }
+            await(startVm())
           }
         }
       }
-      case Cmd.PauseSketch(done) => {
+      case Cmd.PauseSketch(_) => {
         oMasterVm match {
           case Some(masterVm) => {
-            Await.ready(
-              {
-                masterVm.vmManager.send(
-                  VmManager.Cmd.PauseSketch(done)
-                )
-                done.future
-              },
-              Duration.Inf
+            val p = Promise[Unit]();
+            masterVm.vmManager.send(
+              VmManager.Cmd.PauseSketch(p)
             )
+            await(p.future)
             this.running = false;
           }
           case None => {
-            done.failure(new Exception("vm is not running"));
+            throw new Exception("vm is not running");
           }
         }
       }
-      case Cmd.ResumeSketch(done) => {
+      case Cmd.ResumeSketch(_) => {
         oMasterVm match {
           case Some(masterVm) => {
-            Await.ready(
-              {
-                masterVm.vmManager.send(
-                  VmManager.Cmd.ResumeSketch(done)
-                )
-                done.future
-              },
-              Duration.Inf
+            val p = Promise[Unit]();
+            masterVm.vmManager.send(
+              VmManager.Cmd.ResumeSketch(p)
             )
+            await(p.future)
             this.running = false;
           }
           case None => {
-            done.failure(new Exception("vm is not running"));
+            throw new Exception("vm is not running");
           }
         }
       }
-      case Cmd.StopSketch(done) => {
+      case Cmd.StopSketch(_) => {
         oMasterVm match {
           case None => {
-            done.failure(new Exception("vm is not running"));
+            throw new Exception("vm is not running");
           }
           case Some(_) => {
             this.config.log(LogPayload.Stop());
-            Await.ready(
-              done
-                .completeWith(exitVm())
-                .future,
-              Duration.Inf
-            )
+            await(exitVm())
             running = false;
           }
         }
       }
-      case Cmd.Exit(done) => {
+      case Cmd.Exit(_) => {
         oMasterVm match {
           case Some(_) => {
-            Await.ready(
-              done
-                .completeWith(exitVm())
-                .future,
-              Duration.Inf
-            )
+            await(exitVm())
             running = false;
           }
           case None => {
             running = false;
-            done.success(());
           }
         }
 
         isExit = true;
       }
-      case Cmd.AddSlave(id, done) => {
+      case Cmd.AddSlave(id, _) => {
         if (slaves.contains(id)) {
-          done.failure(new Exception("slave is already added"));
+          throw new Exception("slave is already added");
         } else {
           slaves += id;
           oMasterVm match {
             case Some(masterVm) => {
               val slaveVm = createSlaveVm(currentBuild.id);
               masterVm.slaves += (id -> slaveVm);
-
-              Await.ready(
-                done
-                  .completeWith({
-                    val p = Promise[Unit]();
-                    blocking {
-                      slaveVm.vmManager.start(p)
-                    }
-                    p.future
-                  })
-                  .future,
-                Duration.Inf
-              )
-
+              val p = Promise[Unit]();
+              blocking {
+                slaveVm.vmManager.start(p)
+              }
+              await(p.future)
               updateSlaveVms();
             }
-            case None => {
-              done.success(());
-            }
+            case None => {}
           }
         }
       }
-      case Cmd.RemoveSlave(id, done) => {
+      case Cmd.RemoveSlave(id, _) => {
         if (!slaves.contains(id)) {
-          done.failure(new Exception("slave is not added"));
+          throw new Exception("slave is not added")
         } else {
           slaves -= id;
           oMasterVm match {
             case Some(masterVm) => {
-              Await.ready(
-                done
-                  .completeWith(for {
-                    _ <- Future {
-                      assert(masterVm.slaves.contains(id));
-                    }
-                    _ <- exitSlaveVm(masterVm.slaves(id))
-                    _ <- Future {
-                      masterVm.slaves -= id;
-                      updateSlaveVms();
-                    }
-                  } yield ())
-                  .future,
-                Duration.Inf
-              )
+              assert(masterVm.slaves.contains(id));
+              await(exitSlaveVm(masterVm.slaves(id)))
+              masterVm.slaves -= id;
+              updateSlaveVms();
             }
-            case None => {
-              done.success(());
-            }
+            case None => {}
           }
         }
       }
-      case Cmd.RegenerateState(done) => {
+      case Cmd.RegenerateState(_) => {
         randomSeed = random.nextLong();
-        done.success(());
       }
     }
   }
