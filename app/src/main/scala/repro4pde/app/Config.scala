@@ -31,11 +31,13 @@ object LogPayload {
 
 // for research experiments
 case class Config(
-    logFile: Option[File],
-    disableComparison: Boolean,
-    disableAutoReload: Boolean,
-    disableRepro: Boolean,
-    disablePause: Boolean
+    logFile: Option[File] = None,
+    disableComparison: Boolean = false,
+    disableAutoReload: Boolean = false,
+    disableRepro: Boolean = false,
+    disablePause: Boolean = false,
+    disablePdeButton: Boolean = false,
+    disableCloseWindow: Boolean = false
 ) {
   def log(payload: => LogPayload): Unit = {
     logFile match {
@@ -59,23 +61,29 @@ object Config {
     val appBase = new File(base, ".repro4pde")
     val configFile = new File(appBase, "repro4pde.properties")
     if (!configFile.exists()) {
-      return new Config(None, false, false, false, false);
+      return Config();
     }
 
     val properties = new Properties()
     properties.load(new FileInputStream(configFile));
-    val config = new Config(
-      if (properties.getProperty("logging", "false").toBoolean) {
+    val config = Config(
+      logFile = if (properties.getProperty("logging", "false").toBoolean) {
         val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date())
         val random = Random.alphanumeric.take(4).mkString
         Some(new File(appBase, s"repro4pde-$timestamp-$random.log"))
       } else {
         None
       },
-      properties.getProperty("disableComparison", "false").toBoolean,
-      properties.getProperty("disableAutoReload", "false").toBoolean,
-      properties.getProperty("disableRepro", "false").toBoolean,
-      properties.getProperty("disablePause", "false").toBoolean
+      disableComparison =
+        properties.getProperty("disableComparison", "false").toBoolean,
+      disableAutoReload =
+        properties.getProperty("disableAutoReload", "false").toBoolean,
+      disableRepro = properties.getProperty("disableRepro", "false").toBoolean,
+      disablePause = properties.getProperty("disablePause", "false").toBoolean,
+      disablePdeButton =
+        properties.getProperty("disablePdeButton", "false").toBoolean,
+      disableCloseWindow =
+        properties.getProperty("disableCloseWindow", "false").toBoolean
     );
     config.log(LogPayload.Init())
     config

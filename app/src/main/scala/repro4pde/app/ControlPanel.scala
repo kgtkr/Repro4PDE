@@ -50,6 +50,8 @@ import scala.collection.mutable.Set as MSet
 import scalafx.stage.Popup
 import scalafx.scene.image.ImageView
 import scalafx.beans.property.DoubleProperty
+import processing.app.ui.EditorButton
+import processing.app.ui.EditorToolbar
 
 enum PlayerState {
   case Playing;
@@ -95,6 +97,28 @@ object ControlPanel {
         }
         val editorManager = new EditorManager(editor)
         editorManager.start()
+
+        // 実験用設定なので一度無効化したボタンを元に戻す必要はない
+        if (editorManager.config.disablePdeButton) {
+          val toolbar = editor.getToolbar()
+          val runButtonField =
+            classOf[EditorToolbar].getDeclaredField("runButton")
+          runButtonField.setAccessible(true)
+          val runButton = runButtonField
+            .get(toolbar)
+            .asInstanceOf[EditorButton];
+          runButton.setVisible(false)
+
+          val stopButtonField =
+            classOf[EditorToolbar].getDeclaredField("stopButton")
+          stopButtonField.setAccessible(true)
+          val stopButton = stopButtonField
+            .get(toolbar)
+            .asInstanceOf[EditorButton];
+          stopButton.setVisible(false)
+
+        }
+
         val playerState = ObjectProperty(PlayerState.Stopped(false));
         val currentBuildProperty = ObjectProperty[Option[Build]](None);
         val slaveBuildProperty = ObjectProperty[Option[Build]](None);
@@ -273,21 +297,30 @@ object ControlPanel {
           });
         fileWatchThread.start();
 
+        var closeClickCount = 0;
         Platform.runLater(() => {
 
           val stage = new Stage {
             title = "Repro4PDE"
-            onCloseRequest = _ => {
-              addQueue {
-                editorManager.send(
-                  EditorManager.Cmd.Exit(donePromise())
-                );
+            onCloseRequest = evt => {
+              if (
+                editorManager.config.disableCloseWindow && closeClickCount < 10
+              ) {
+                closeClickCount += 1;
+                evt.consume();
+              } else {
+                addQueue {
+                  editorManager.send(
+                    EditorManager.Cmd.Exit(donePromise())
+                  );
 
-                fileWatchThread.interrupt();
-                instances.synchronized {
-                  instances.remove(editor)
+                  fileWatchThread.interrupt();
+                  instances.synchronized {
+                    instances.remove(editor)
+                  }
                 }
               }
+
             }
             scene = new Scene(600, 300) {
               fill = Color.rgb(240, 240, 240)
