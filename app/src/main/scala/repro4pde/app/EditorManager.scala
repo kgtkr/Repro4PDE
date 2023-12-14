@@ -251,6 +251,7 @@ class EditorManager(val editor: JavaEditor) {
   private def startVm() = {
     assert(oMasterVm.isEmpty);
     editor.statusEmpty();
+    editor.clearConsole();
     eventListeners.foreach(_(Event.ClearLog()));
     eventListeners.foreach(_(Event.ClearedScreenshots()));
 
