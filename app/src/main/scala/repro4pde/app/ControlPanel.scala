@@ -523,33 +523,20 @@ object ControlPanel {
                                 content = SVGResources.stop
                                 fill = Black
                               }
-                              disable <== Bindings.createBooleanBinding(
-                                () =>
-                                  loading.value || (playerState.value match {
-                                    case PlayerState.Stopped(_) => true
-                                    case _                      => false
-                                  }),
-                                loading,
-                                playerState
-                              )
+                              disable <== loading
                               onAction = _ => {
                                 if (!loading.value) {
                                   addQueue {
-                                    playerState.value match {
-                                      case PlayerState.Stopped(_) => {}
-                                      case _ => {
-                                        editorManager.send(
-                                          EditorManager.Cmd.StopSketch(
-                                            donePromise {
-                                              playerState.value =
-                                                PlayerState.Stopped(
-                                                  false
-                                                );
-                                            }
-                                          )
-                                        )
-                                      }
-                                    }
+                                    editorManager.send(
+                                      EditorManager.Cmd.StopSketch(
+                                        donePromise {
+                                          playerState.value =
+                                            PlayerState.Stopped(
+                                              false
+                                            );
+                                        }
+                                      )
+                                    )
                                   }
                                 }
 
