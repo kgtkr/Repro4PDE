@@ -299,13 +299,12 @@ object ControlPanel {
                 center = new VBox {
                   children = Seq(
                     new VBox {
-                      children = Seq(
-                        new HBox {
+                      if (!editorManager.config.disableRepro) {
+                        children += new HBox {
                           alignment = Pos.Center
                           val slider = new Slider(0, 0, 0) {
                             disable <== Bindings.createBooleanBinding(
-                              () =>
-                                loading.value && !editorManager.config.disableRepro,
+                              () => loading.value,
                               loading
                             )
                             onMouseMoved = e => {
@@ -324,7 +323,7 @@ object ControlPanel {
                             valueChanging.addListener({
                               (_, oldChanging, changing) =>
                                 if (
-                                  oldChanging && !changing && !loading.value && !editorManager.config.disableRepro
+                                  oldChanging && !changing && !loading.value
                                 ) {
                                   addQueue {
                                     editorManager.send(
@@ -431,7 +430,9 @@ object ControlPanel {
                               this.setX(screenshotXProperty.value - 75)
                             }
                           };
-                        },
+                        }
+                      }
+                      children ++= Seq(
                         new HBox(10) {
                           alignment = Pos.Center
                           children = Seq(
@@ -449,7 +450,11 @@ object ControlPanel {
                                     if (
                                       playerState.value == PlayerState.Playing
                                     ) {
-                                      SVGResources.pause
+                                      if (editorManager.config.disablePause) {
+                                        SVGResources.play
+                                      } else {
+                                        SVGResources.pause
+                                      }
                                     } else {
                                       SVGResources.play
                                     },
@@ -457,12 +462,18 @@ object ControlPanel {
                                 )
                                 fill = Black
                               }
-                              disable <== loading
+                              disable <== Bindings.createBooleanBinding(
+                                () =>
+                                  loading.value || (editorManager.config.disablePause && playerState.value == PlayerState.Playing),
+                                loading,
+                                playerState
+                              )
                               onAction = _ => {
                                 if (!loading.value) {
                                   addQueue {
                                     playerState.value match {
-                                      case PlayerState.Playing => {
+                                      case PlayerState.Playing
+                                          if !editorManager.config.disablePause => {
                                         editorManager.send(
                                           EditorManager.Cmd.PauseSketch(
                                             donePromise {
@@ -493,6 +504,7 @@ object ControlPanel {
                                           )
                                         )
                                       }
+                                      case _ => {}
                                     }
                                   }
                                 }
@@ -542,8 +554,11 @@ object ControlPanel {
                                 }
 
                               }
-                            },
-                            new Button {
+                            }
+                          )
+
+                          if (!editorManager.config.disableRepro) {
+                            children += new Button {
                               text = Locale.locale.regenerateState
                               disable <== loading
                               onAction = _ => {
@@ -559,7 +574,7 @@ object ControlPanel {
 
                               }
                             }
-                          )
+                          }
 
                           if (!editorManager.config.disableComparison) {
                             children += new Button {

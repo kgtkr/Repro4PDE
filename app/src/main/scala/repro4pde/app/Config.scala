@@ -21,8 +21,6 @@ object LogEntry {
 enum LogPayload {
   case Init()
   case Start(sources: List[(String, String)])
-  case Pause()
-  case Resume()
   case Stop()
 }
 
@@ -36,7 +34,8 @@ case class Config(
     logFile: Option[File],
     disableComparison: Boolean,
     disableAutoReload: Boolean,
-    disableRepro: Boolean
+    disableRepro: Boolean,
+    disablePause: Boolean
 ) {
   def log(payload: => LogPayload): Unit = {
     logFile match {
@@ -60,7 +59,7 @@ object Config {
     val appBase = new File(base, ".repro4pde")
     val configFile = new File(appBase, "repro4pde.properties")
     if (!configFile.exists()) {
-      return new Config(None, false, false, false);
+      return new Config(None, false, false, false, false);
     }
 
     val properties = new Properties()
@@ -75,7 +74,8 @@ object Config {
       },
       properties.getProperty("disableComparison", "false").toBoolean,
       properties.getProperty("disableAutoReload", "false").toBoolean,
-      properties.getProperty("disableRepro", "false").toBoolean
+      properties.getProperty("disableRepro", "false").toBoolean,
+      properties.getProperty("disablePause", "false").toBoolean
     );
     config.log(LogPayload.Init())
     config
