@@ -107,6 +107,17 @@ class EditorManager(val editor: JavaEditor) {
   val random = new Random();
   var randomSeed = random.nextLong();
 
+  private def getCodes(): Array[(String, String)] = {
+    editor
+      .getSketch()
+      .getCode()
+      .map { code =>
+        val name = code.getFile().toString();
+        val text = code.getProgram();
+        (name, text)
+      }
+  }
+
   private def updateBuild() = {
     editor.statusEmpty();
     editor.clearConsole();
@@ -169,6 +180,12 @@ class EditorManager(val editor: JavaEditor) {
     } catch {
       case e: SketchException => {
         editor.statusError(e);
+        config.log(
+          LogPayload.CompileError(
+            e.getMessage(),
+            getCodes().toList
+          )
+        )
         throw e;
       }
     }
@@ -442,15 +459,7 @@ class EditorManager(val editor: JavaEditor) {
     cmd match {
       case Cmd.ReloadSketch(_, force) =>
         boundary {
-          val newCodes = editor
-            .getSketch()
-            .getCode()
-            .map { code =>
-              val name = code.getFile().toString();
-              val text = code.getProgram();
-              (name, text)
-            }
-            .toMap;
+          val newCodes = getCodes().toMap;
           if (newCodes == prevCodes && !force) {
             boundary.break(())
           }
@@ -500,15 +509,7 @@ class EditorManager(val editor: JavaEditor) {
               this.updateBuild();
               this.config.log(
                 LogPayload.Start(
-                  editor
-                    .getSketch()
-                    .getCode()
-                    .map { code =>
-                      val name = code.getFile().toString();
-                      val text = code.getProgram();
-                      (name, text)
-                    }
-                    .toList
+                  getCodes().toList
                 )
               );
             }

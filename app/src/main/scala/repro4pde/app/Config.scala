@@ -22,6 +22,7 @@ enum LogPayload {
   case Init()
   case Start(sources: List[(String, String)])
   case Stop()
+  case CompileError(message: String, sources: List[(String, String)])
 }
 
 object LogPayload {
