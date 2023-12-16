@@ -10,7 +10,7 @@ import java.awt.event.{
   MouseWheelListener,
   KeyListener
 }
-import repro4pde.shared.RuntimeEvent
+import repro4pde.runtime.shared.RuntimeEvent
 
 class PSurfaceAWTRuntime(graphics: PGraphics) extends PSurfaceAWT(graphics) {
   var mouseListeners: Array[MouseListener] = null;

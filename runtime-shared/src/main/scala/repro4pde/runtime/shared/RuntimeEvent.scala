@@ -1,4 +1,4 @@
-package repro4pde.shared;
+package repro4pde.runtime.shared;
 
 import java.nio.ByteBuffer
 import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,

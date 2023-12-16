@@ -1,8 +1,8 @@
 package repro4pde.runtime
 
-import repro4pde.shared.PdeMouseEventWrapper
+import repro4pde.runtime.shared.PdeMouseEventWrapper
 import processing.event.Event
-import repro4pde.shared.PdeKeyEventWrapper
+import repro4pde.runtime.shared.PdeKeyEventWrapper
 import processing.event.MouseEvent
 import processing.event.KeyEvent
 

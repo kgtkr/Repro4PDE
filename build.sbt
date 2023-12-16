@@ -36,11 +36,11 @@ lazy val codegenProject = project
     Compile / unmanagedJars ++= Processing.coreCpTask.value
   );
 
-lazy val sharedProject = project
-  .in(file("shared"))
+lazy val runtimeSharedProject = project
+  .in(file("runtime-shared"))
   .settings(sharedSettings)
   .settings(
-    name := "repro4pde-shared",
+    name := "repro4pde-runtime-shared",
     libraryDependencies ++= circeDependencies
   );
 
@@ -53,7 +53,7 @@ lazy val utilsProject = project
 
 lazy val runtimeProject = project
   .in(file("runtime"))
-  .dependsOn(sharedProject)
+  .dependsOn(runtimeSharedProject)
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-runtime",
@@ -88,7 +88,7 @@ lazy val toolProject = project
 
 lazy val appProject = project
   .in(file("app"))
-  .dependsOn(utilsProject, sharedProject)
+  .dependsOn(utilsProject, runtimeSharedProject)
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-app",
@@ -122,7 +122,7 @@ lazy val appProject = project
 
 lazy val allProjects = Seq(
   codegenProject,
-  sharedProject,
+  runtimeSharedProject,
   utilsProject,
   runtimeProject,
   toolProject,

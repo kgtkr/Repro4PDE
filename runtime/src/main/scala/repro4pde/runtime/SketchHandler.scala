@@ -6,9 +6,9 @@ import processing.event.KeyEvent
 import scala.collection.mutable.Buffer
 import io.circe._, io.circe.generic.semiauto._
 import scala.util.Try
-import repro4pde.shared.PdeEventWrapper
-import repro4pde.shared.RuntimeEvent
-import repro4pde.shared.FrameState
+import repro4pde.runtime.shared.PdeEventWrapper
+import repro4pde.runtime.shared.RuntimeEvent
+import repro4pde.runtime.shared.FrameState
 import scala.collection.mutable.{Map => MMap}
 
 class SketchHandler(

@@ -1,4 +1,4 @@
-package repro4pde.shared
+package repro4pde.runtime.shared
 
 import io.circe._, io.circe.generic.semiauto._
 

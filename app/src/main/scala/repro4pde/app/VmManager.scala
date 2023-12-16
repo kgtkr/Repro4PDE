@@ -28,10 +28,10 @@ import scala.collection.mutable.Buffer
 import processing.app.RunnerListener
 import com.sun.jdi.VMDisconnectedException
 import com.sun.jdi.event.VMDeathEvent
-import repro4pde.shared.RuntimeCmd
-import repro4pde.shared.RuntimeEvent
-import repro4pde.shared.FrameState
-import repro4pde.shared.InitParams
+import repro4pde.runtime.shared.RuntimeCmd
+import repro4pde.runtime.shared.RuntimeEvent
+import repro4pde.runtime.shared.FrameState
+import repro4pde.runtime.shared.InitParams
 object VmManager {
   enum SlaveSyncCmd {
     case AddedEvents(frameStates: List[FrameState]);

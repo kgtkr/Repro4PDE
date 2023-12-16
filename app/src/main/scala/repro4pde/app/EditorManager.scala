@@ -27,7 +27,7 @@ import processing.app.Base
 import java.nio.file.Path
 import java.nio.file.Files
 import java.nio.charset.StandardCharsets
-import repro4pde.shared.FrameState
+import repro4pde.runtime.shared.FrameState
 import processing.app.RunnerListener
 import java.util.Random
 import cps.*
