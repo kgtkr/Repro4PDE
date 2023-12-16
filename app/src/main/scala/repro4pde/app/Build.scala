@@ -1,13 +1,9 @@
 package repro4pde.app;
 
-import processing.mode.java.JavaBuild
-import java.awt.Color
-
-class Build(
-    val id: Int,
-    val javaBuild: JavaBuild,
-    val codes: Map[String, BuildCode]
-) {}
+case class Build(
+    id: Int,
+    codes: Map[String, BuildCode]
+);
 
 case class BuildCode(
     val name: String,
@@ -22,6 +18,6 @@ case class BuildCodeLine(
 
 case class BuildCodeToken(
     val token: String,
-    val color: Color,
+    val color: (Int, Int, Int),
     val bold: Boolean
 )

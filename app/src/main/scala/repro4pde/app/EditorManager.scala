@@ -91,8 +91,8 @@ class EditorManager(val editor: JavaEditor) {
   var maxFrameCount = 0;
   val frameStates = Buffer[FrameState]();
   var running = false;
-  var currentBuild: Build = null;
-  val builds = Buffer[Build]();
+  var currentBuild: (Int, JavaBuild) = null;
+  val builds = Buffer[JavaBuild]();
   var oMasterVm: Option[MasterVm] = None;
   val slaves = MSet[Int]();
   var isExit = false;
@@ -214,7 +214,11 @@ class EditorManager(val editor: JavaEditor) {
                   val tokenStr =
                     line.substring(offset, offset + token.length);
                   offset += token.length;
-                  BuildCodeToken(tokenStr, color, bold)
+                  BuildCodeToken(
+                    tokenStr,
+                    (color.getRed(), color.getGreen(), color.getBlue()),
+                    bold
+                  )
                 }
                 .toList
               BuildCodeLine(i, line, tokens)
@@ -226,11 +230,12 @@ class EditorManager(val editor: JavaEditor) {
         }
     )
 
-    currentBuild = new Build(this.builds.length, javaBuild, codes);
+    val buildId = this.builds.length;
+    currentBuild = (buildId, javaBuild);
 
-    this.builds += currentBuild;
+    this.builds += javaBuild;
     this.eventListeners.foreach(
-      _(Event.CreatedBuild(currentBuild))
+      _(Event.CreatedBuild(new Build(buildId, codes)))
     );
   }
 
@@ -272,7 +277,7 @@ class EditorManager(val editor: JavaEditor) {
       slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
     );
     val masterVmManager = new VmManager(
-      javaBuild = currentBuild.javaBuild,
+      javaBuild = currentBuild._2,
       slaveMode = false,
       runnerListener = new RunnerListenerEdtAdapter(editor) {
         override def statusError(x: Exception): Unit = {
@@ -340,7 +345,7 @@ class EditorManager(val editor: JavaEditor) {
   private def createSlaveVm(buildId: Int) = {
     val slaveVm = new SlaveVm(
       new VmManager(
-        javaBuild = builds(buildId).javaBuild,
+        javaBuild = builds(buildId),
         slaveMode = true,
         runnerListener = new RunnerListener {
           override def isHalted(): Boolean = false;
@@ -585,7 +590,7 @@ class EditorManager(val editor: JavaEditor) {
           slaves += id;
           oMasterVm match {
             case Some(masterVm) => {
-              val slaveVm = createSlaveVm(currentBuild.id);
+              val slaveVm = createSlaveVm(currentBuild._1);
               masterVm.slaves += (id -> slaveVm);
               val p = Promise[Unit]();
               blocking {

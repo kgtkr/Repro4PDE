@@ -795,9 +795,9 @@ object ControlPanel {
                             new Text {
                               text = token.token
                               fill = Color.rgb(
-                                token.color.getRed(),
-                                token.color.getGreen(),
-                                token.color.getBlue()
+                                token.color._1,
+                                token.color._2,
+                                token.color._3
                               )
                               if (token.bold) {
                                 style = "-fx-font-weight: bold"
