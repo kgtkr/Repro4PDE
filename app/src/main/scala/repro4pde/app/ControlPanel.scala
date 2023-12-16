@@ -52,6 +52,7 @@ import scalafx.scene.image.ImageView
 import scalafx.beans.property.DoubleProperty
 import processing.app.ui.EditorButton
 import processing.app.ui.EditorToolbar
+import processing.app.Language
 
 enum PlayerState {
   case Playing;
@@ -61,6 +62,7 @@ enum PlayerState {
 
 object ControlPanel {
   val instances = MMap[JavaEditor, Stage]();
+  val locale = Locale.getLocale(Language.getLanguage())
 
   def init() = {
     Platform.implicitExit = false;
@@ -424,8 +426,8 @@ object ControlPanel {
                             new Text {
                               text <== Bindings.createStringBinding(
                                 () =>
-                                  f"${slider.value.intValue()}%d${Locale.locale.secound}/ ${slider.max
-                                      .intValue()}%d${Locale.locale.secound}",
+                                  f"${slider.value.intValue()}%d${locale.secound}/ ${slider.max
+                                      .intValue()}%d${locale.secound}",
                                 slider.value,
                                 slider.max
                               )
@@ -579,7 +581,7 @@ object ControlPanel {
                           alignment = Pos.Center
 
                           children += new Button {
-                            text = Locale.locale.regenerateState
+                            text = locale.regenerateState
                             disable <== loading
                             onAction = _ => {
                               if (!loading.value) {
@@ -598,9 +600,9 @@ object ControlPanel {
                               text <== Bindings.createStringBinding(
                                 () =>
                                   if (slaveBuildProperty.value.isDefined) {
-                                    Locale.locale.disableComparison
+                                    locale.disableComparison
                                   } else {
-                                    Locale.locale.enableComparison
+                                    locale.enableComparison
                                   },
                                 slaveBuildProperty
                               )
@@ -670,7 +672,7 @@ object ControlPanel {
                                 slaveErrorProperty.value
                               ) match {
                                 case (Some(_), Some(error)) => {
-                                  Locale.locale.slaveError + ": " + error
+                                  locale.slaveError + ": " + error
                                 }
                                 case _ => {
                                   ""
@@ -706,7 +708,7 @@ object ControlPanel {
         .sorted
         .map { filename =>
           new Text {
-            text = s"${Locale.locale.deleted}: ${filename}"
+            text = s"${locale.deleted}: ${filename}"
           }
         };
     val createdFiles =
@@ -716,7 +718,7 @@ object ControlPanel {
         .sorted
         .map { filename =>
           new Text {
-            text = s"${Locale.locale.created}: ${filename}"
+            text = s"${locale.created}: ${filename}"
           }
         }
 
@@ -739,7 +741,7 @@ object ControlPanel {
             Some(new VBox {
               children = Seq(
                 new Text {
-                  text = s"${Locale.locale.changed}: ${file}"
+                  text = s"${locale.changed}: ${file}"
                 },
                 new GridPane {
                   enum ChangeType(
@@ -959,7 +961,7 @@ object ControlPanel {
           new TextFlow {
             children = Seq(
               new Text {
-                text = Locale.locale.unchanged
+                text = locale.unchanged
               }
             )
           }

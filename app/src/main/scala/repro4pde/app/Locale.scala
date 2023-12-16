@@ -1,9 +1,6 @@
 package repro4pde.app
 
-import processing.app.Language
-
 object Locale {
-  val lang = Language.getLanguage();
   val defaultLocale = new Locale {
     val enableComparison = "Enable comparison with current code";
     val disableComparison = "Disable comparison with current code";
@@ -31,7 +28,10 @@ object Locale {
       val regenerateState = "乱数を再生成";
     }
   );
-  val locale = locales.getOrElse(lang, defaultLocale);
+
+  def getLocale(lang: String): Locale = {
+    locales.getOrElse(lang, defaultLocale);
+  }
 }
 
 abstract class Locale {
