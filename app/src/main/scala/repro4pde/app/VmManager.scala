@@ -39,12 +39,10 @@ object VmManager {
   }
 
   enum Cmd {
-    val done: Promise[Unit];
-
-    case StartSketch(done: Promise[Unit]) // for internal
-    case PauseSketch(done: Promise[Unit])
-    case ResumeSketch(done: Promise[Unit])
-    case Exit(done: Promise[Unit])
+    case StartSketch() // for internal
+    case PauseSketch()
+    case ResumeSketch()
+    case Exit()
 
   }
 
@@ -62,7 +60,7 @@ object VmManager {
 
   enum Task {
     case TVmEvent(eventSet: EventSet);
-    case TCmd(cmd: Cmd);
+    case TCmd(cmd: Cmd, done: Promise[Unit]);
     case TSlaveSyncCmd(cmd: SlaveSyncCmd);
     case TRuntimeEvent(event: RuntimeEvent);
   }
@@ -89,7 +87,7 @@ class VmManager(
   import VmManager._;
 
   var eventListeners = List[Event => Unit]();
-  var progressCmd: Option[Cmd] = None;
+  var progressCmd: Option[(Cmd, Promise[Unit])] = None;
   var running = false;
   val taskQueue = new LinkedTransferQueue[Task]();
   @volatile
@@ -97,7 +95,7 @@ class VmManager(
   @volatile
   var exited = false;
 
-  def start(done: Promise[Unit]) = {
+  def start(startDone: Promise[Unit]) = {
     var exitType = ExitType.Running;
 
     val runtimeDir = Files.createTempDirectory("repro4pde");
@@ -196,7 +194,7 @@ class VmManager(
       thread.start();
       threads += thread;
     };
-    this.progressCmd = Some(Cmd.StartSketch(done));
+    this.progressCmd = Some(Cmd.StartSketch(), startDone);
 
     new Thread(() => {
       try {
@@ -303,16 +301,16 @@ class VmManager(
                 vm.resume();
               }
             }
-            case TCmd(cmd) => {
+            case TCmd(cmd, done) => {
               if (progressCmd.isEmpty) {
-                progressCmd = Some(cmd);
+                progressCmd = Some((cmd, done));
 
                 cmd match {
-                  case Cmd.StartSketch(done) => {
+                  case Cmd.StartSketch() => {
                     progressCmd = None;
                     done.failure(new Exception("already started"));
                   }
-                  case Cmd.PauseSketch(done) => {
+                  case Cmd.PauseSketch() => {
                     if (!running) {
                       progressCmd = None;
                       done.failure(new Exception("already paused"));
@@ -322,7 +320,7 @@ class VmManager(
                     }
 
                   }
-                  case Cmd.ResumeSketch(done) => {
+                  case Cmd.ResumeSketch() => {
                     if (running) {
                       progressCmd = None;
                       done.failure(new Exception("already running"));
@@ -331,7 +329,7 @@ class VmManager(
                       running = true;
                     }
                   }
-                  case Cmd.Exit(done) => {
+                  case Cmd.Exit() => {
                     vm.exit(0);
                     exitType = ExitType.ExitCmd;
 
@@ -340,7 +338,7 @@ class VmManager(
                   }
                 }
               } else {
-                cmd.done.failure(new Exception("already progress"));
+                done.failure(new Exception("already progress"));
               }
             }
             case TSlaveSyncCmd(cmd) => {
@@ -361,7 +359,7 @@ class VmManager(
               event match {
                 case RuntimeEvent.OnTargetFrameCount(screenshotPaths) => {
                   progressCmd match {
-                    case Some(Cmd.StartSketch(done)) => {
+                    case Some(Cmd.StartSketch(), done) => {
                       eventListeners.foreach(
                         _(
                           Event.AddedScreenshots(
@@ -409,9 +407,9 @@ class VmManager(
                 }
                 case RuntimeEvent.OnPaused => {
                   progressCmd match {
-                    case Some(cmd: Cmd.PauseSketch) => {
+                    case Some(cmd: Cmd.PauseSketch, done) => {
                       progressCmd = None;
-                      cmd.done.success(());
+                      done.success(());
                     }
                     case progressCmd => {
                       Logger.log("Unexpected event: OnPaused");
@@ -420,9 +418,9 @@ class VmManager(
                 }
                 case RuntimeEvent.OnResumed => {
                   progressCmd match {
-                    case Some(cmd: Cmd.ResumeSketch) => {
+                    case Some(cmd: Cmd.ResumeSketch, done) => {
                       progressCmd = None;
-                      cmd.done.success(());
+                      done.success(());
                     }
                     case progressCmd => {
                       Logger.log("Unexpected event: OnResumed");
@@ -441,7 +439,7 @@ class VmManager(
 
       threads.foreach(_.interrupt())
       progressCmd.foreach(
-        _.done.failure(new Exception("unexpected vm exit"))
+        _._2.failure(new Exception("unexpected vm exit"))
       );
       progressCmd = None;
       running = false;
@@ -470,9 +468,9 @@ class VmManager(
     eventListeners = listener :: eventListeners;
   }
 
-  def send(cmd: Cmd) = {
+  def send(cmd: Cmd, done: Promise[Unit]) = {
     assert(!exited);
-    taskQueue.add(TCmd(cmd));
+    taskQueue.add(TCmd(cmd, done));
   }
 
   def sendSlaveSync(cmd: SlaveSyncCmd) = {

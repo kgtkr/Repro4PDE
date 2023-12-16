@@ -266,17 +266,17 @@ object ControlPanel {
                           addQueue {
                             editorManager.send(
                               EditorManager.Cmd.ReloadSketch(
-                                donePromise {
-                                  if (
-                                    playerState.value == PlayerState.Stopped(
-                                      true
-                                    )
-                                  ) {
-                                    playerState.value = PlayerState.Playing;
-                                  }
-                                },
                                 false
-                              )
+                              ),
+                              donePromise {
+                                if (
+                                  playerState.value == PlayerState.Stopped(
+                                    true
+                                  )
+                                ) {
+                                  playerState.value = PlayerState.Playing;
+                                }
+                              }
                             )
                           }
                         }
@@ -311,7 +311,8 @@ object ControlPanel {
               } else {
                 addQueue {
                   editorManager.send(
-                    EditorManager.Cmd.Exit(donePromise())
+                    EditorManager.Cmd.Exit(),
+                    donePromise()
                   );
 
                   fileWatchThread.interrupt();
@@ -361,19 +362,19 @@ object ControlPanel {
                                   addQueue {
                                     editorManager.send(
                                       EditorManager.Cmd.UpdateLocation(
-                                        (value.value * 60).toInt,
-                                        donePromise {
-                                          if (
-                                            playerState.value == PlayerState
-                                              .Stopped(
-                                                true
-                                              )
-                                          ) {
-                                            playerState.value =
-                                              PlayerState.Playing;
-                                          }
+                                        (value.value * 60).toInt
+                                      ),
+                                      donePromise {
+                                        if (
+                                          playerState.value == PlayerState
+                                            .Stopped(
+                                              true
+                                            )
+                                        ) {
+                                          playerState.value =
+                                            PlayerState.Playing;
                                         }
-                                      )
+                                      }
                                     );
                                   }
                                 }
@@ -508,33 +509,29 @@ object ControlPanel {
                                       case PlayerState.Playing
                                           if !editorManager.config.disablePause => {
                                         editorManager.send(
-                                          EditorManager.Cmd.PauseSketch(
-                                            donePromise {
-                                              playerState.value =
-                                                PlayerState.Paused;
-
-                                            }
-                                          )
+                                          EditorManager.Cmd.PauseSketch(),
+                                          donePromise {
+                                            playerState.value =
+                                              PlayerState.Paused;
+                                          }
                                         )
                                       }
                                       case PlayerState.Paused => {
                                         editorManager.send(
-                                          EditorManager.Cmd.ResumeSketch(
-                                            donePromise {
-                                              playerState.value =
-                                                PlayerState.Playing;
-                                            }
-                                          )
+                                          EditorManager.Cmd.ResumeSketch(),
+                                          donePromise {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
                                         )
                                       }
                                       case PlayerState.Stopped(_) => {
                                         editorManager.send(
-                                          EditorManager.Cmd.StartSketch(
-                                            donePromise {
-                                              playerState.value =
-                                                PlayerState.Playing;
-                                            }
-                                          )
+                                          EditorManager.Cmd.StartSketch(),
+                                          donePromise {
+                                            playerState.value =
+                                              PlayerState.Playing;
+                                          }
                                         )
                                       }
                                       case _ => {}
@@ -561,14 +558,12 @@ object ControlPanel {
                                 if (!loading.value) {
                                   addQueue {
                                     editorManager.send(
-                                      EditorManager.Cmd.StopSketch(
-                                        donePromise {
-                                          playerState.value =
-                                            PlayerState.Stopped(
-                                              false
-                                            );
-                                        }
-                                      )
+                                      EditorManager.Cmd.StopSketch(),
+                                      donePromise {
+                                        playerState.value = PlayerState.Stopped(
+                                          false
+                                        );
+                                      }
                                     )
                                   }
                                 }
@@ -590,9 +585,8 @@ object ControlPanel {
                               if (!loading.value) {
                                 addQueue {
                                   editorManager.send(
-                                    EditorManager.Cmd.RegenerateState(
-                                      donePromise()
-                                    )
+                                    EditorManager.Cmd.RegenerateState(),
+                                    donePromise()
                                   )
                                 }
                               }
@@ -629,9 +623,9 @@ object ControlPanel {
                                           slaveBuildProperty.value = None
                                           editorManager.send(
                                             EditorManager.Cmd.RemoveSlave(
-                                              slaveBuild.id,
-                                              donePromise()
-                                            )
+                                              slaveBuild.id
+                                            ),
+                                            donePromise()
                                           )
                                         }
                                         case None => {
@@ -639,9 +633,9 @@ object ControlPanel {
                                             Some(currentBuild)
                                           editorManager.send(
                                             EditorManager.Cmd.AddSlave(
-                                              currentBuild.id,
-                                              donePromise()
-                                            )
+                                              currentBuild.id
+                                            ),
+                                            donePromise()
                                           )
                                         }
                                       }

@@ -36,22 +36,18 @@ import scala.util.boundary
 
 object EditorManager {
   enum Cmd {
-    val done: Promise[Unit];
-
-    case ReloadSketch(done: Promise[Unit], force: Boolean)
+    case ReloadSketch(force: Boolean)
     case UpdateLocation(
-        frameCount: Int,
-        done: Promise[Unit]
+        frameCount: Int
     )
-    case StartSketch(done: Promise[Unit])
-    case PauseSketch(done: Promise[Unit])
-    case ResumeSketch(done: Promise[Unit])
-    // TODO: このコマンドを送るUI実装
-    case StopSketch(done: Promise[Unit])
-    case Exit(done: Promise[Unit])
-    case AddSlave(id: Int, done: Promise[Unit])
-    case RemoveSlave(id: Int, done: Promise[Unit])
-    case RegenerateState(done: Promise[Unit])
+    case StartSketch()
+    case PauseSketch()
+    case ResumeSketch()
+    case StopSketch()
+    case Exit()
+    case AddSlave(id: Int)
+    case RemoveSlave(id: Int)
+    case RegenerateState()
 
   }
 
@@ -76,7 +72,7 @@ object EditorManager {
   class MasterVm(val vmManager: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 
   enum Task {
-    case TCmd(cmd: Cmd)
+    case TCmd(cmd: Cmd, done: Promise[Unit])
     case TMasterEvent(masterVm: MasterVm, event: VmManager.Event)
     case TSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event)
   }
@@ -391,7 +387,7 @@ class EditorManager(val editor: JavaEditor) {
       }
     } else {
       val p = Promise[Unit]();
-      slaveVm.vmManager.send(VmManager.Cmd.Exit(p));
+      slaveVm.vmManager.send(VmManager.Cmd.Exit(), p);
       p.future
     }
   }
@@ -409,7 +405,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         } else {
           val p = Promise[Unit]();
-          vmManager.send(VmManager.Cmd.Exit(p));
+          vmManager.send(VmManager.Cmd.Exit(), p);
           p.future
         }
 
@@ -434,9 +430,9 @@ class EditorManager(val editor: JavaEditor) {
       while (!isExit) {
         val task = taskQueue.take();
         task match {
-          case TCmd(cmd) => {
+          case TCmd(cmd, done) => {
             Await.ready(
-              cmd.done
+              done
                 .completeWith(processCmd(cmd))
                 .future,
               Duration.Inf
@@ -457,7 +453,7 @@ class EditorManager(val editor: JavaEditor) {
 
   private def processCmd(cmd: Cmd): Future[Unit] = async[Future] {
     cmd match {
-      case Cmd.ReloadSketch(_, force) =>
+      case Cmd.ReloadSketch(force) =>
         boundary {
           val newCodes = getCodes().toMap;
           if (newCodes == prevCodes && !force) {
@@ -478,7 +474,7 @@ class EditorManager(val editor: JavaEditor) {
           }
 
         }
-      case Cmd.UpdateLocation(frameCount, _) => {
+      case Cmd.UpdateLocation(frameCount) => {
         oMasterVm match {
           case Some(_) => {
             await(exitVm())
@@ -490,7 +486,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.StartSketch(_) => {
+      case Cmd.StartSketch() => {
         oMasterVm match {
           case Some(masterVm) if masterVm.vmManager.isExited => {
             await(exitVm())
@@ -525,12 +521,13 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.PauseSketch(_) => {
+      case Cmd.PauseSketch() => {
         oMasterVm match {
           case Some(masterVm) => {
             val p = Promise[Unit]();
             masterVm.vmManager.send(
-              VmManager.Cmd.PauseSketch(p)
+              VmManager.Cmd.PauseSketch(),
+              p
             )
             await(p.future)
             this.running = false;
@@ -540,12 +537,13 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.ResumeSketch(_) => {
+      case Cmd.ResumeSketch() => {
         oMasterVm match {
           case Some(masterVm) => {
             val p = Promise[Unit]();
             masterVm.vmManager.send(
-              VmManager.Cmd.ResumeSketch(p)
+              VmManager.Cmd.ResumeSketch(),
+              p
             )
             await(p.future)
             this.running = false;
@@ -555,7 +553,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.StopSketch(_) => {
+      case Cmd.StopSketch() => {
         oMasterVm match {
           case None => {
             throw new Exception("vm is not running");
@@ -567,7 +565,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.Exit(_) => {
+      case Cmd.Exit() => {
         oMasterVm match {
           case Some(_) => {
             await(exitVm())
@@ -580,7 +578,7 @@ class EditorManager(val editor: JavaEditor) {
 
         isExit = true;
       }
-      case Cmd.AddSlave(id, _) => {
+      case Cmd.AddSlave(id) => {
         if (slaves.contains(id)) {
           throw new Exception("slave is already added");
         } else {
@@ -600,7 +598,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.RemoveSlave(id, _) => {
+      case Cmd.RemoveSlave(id) => {
         if (!slaves.contains(id)) {
           throw new Exception("slave is not added")
         } else {
@@ -616,7 +614,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.RegenerateState(_) => {
+      case Cmd.RegenerateState() => {
         randomSeed = random.nextLong();
       }
     }
@@ -703,8 +701,8 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
-  def send(cmd: Cmd) = {
-    taskQueue.put(TCmd(cmd));
+  def send(cmd: Cmd, done: Promise[Unit]) = {
+    taskQueue.put(TCmd(cmd, done));
   }
 
   def listen(listener: Event => Unit) = {
