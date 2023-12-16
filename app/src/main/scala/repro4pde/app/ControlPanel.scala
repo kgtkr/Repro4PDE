@@ -576,22 +576,25 @@ object ControlPanel {
                               }
                             }
                           )
+                        }
+                      )
 
-                          if (!editorManager.config.disableRepro) {
-                            children += new Button {
-                              text = Locale.locale.regenerateState
-                              disable <== loading
-                              onAction = _ => {
-                                if (!loading.value) {
-                                  addQueue {
-                                    editorManager.send(
-                                      EditorManager.Cmd.RegenerateState(
-                                        donePromise()
-                                      )
+                      if (!editorManager.config.disableRepro) {
+                        children += new HBox(10) {
+                          alignment = Pos.Center
+
+                          children += new Button {
+                            text = Locale.locale.regenerateState
+                            disable <== loading
+                            onAction = _ => {
+                              if (!loading.value) {
+                                addQueue {
+                                  editorManager.send(
+                                    EditorManager.Cmd.RegenerateState(
+                                      donePromise()
                                     )
-                                  }
+                                  )
                                 }
-
                               }
                             }
                           }
@@ -649,10 +652,9 @@ object ControlPanel {
 
                               }
                             };
-
                           }
                         }
-                      )
+                      }
                     },
                     new Pane {
                       vgrow = Priority.Always
