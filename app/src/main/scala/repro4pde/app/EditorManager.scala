@@ -85,7 +85,7 @@ class EditorManager(val editor: JavaEditor) {
 
   val taskQueue = new LinkedTransferQueue[Task]();
   var eventListeners = List[Event => Unit]();
-  val config = Config.loadConfig(editor.getSketch().getFolder());
+  val (config, logger) = Config.loadConfig(editor.getSketch().getFolder());
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -176,8 +176,8 @@ class EditorManager(val editor: JavaEditor) {
     } catch {
       case e: SketchException => {
         editor.statusError(e);
-        config.log(
-          LogPayload.CompileError(
+        logger.log(
+          OperationLogger.Payload.CompileError(
             e.getMessage(),
             getCodes().toList
           )
@@ -508,8 +508,8 @@ class EditorManager(val editor: JavaEditor) {
             blocking {
               editor.prepareRun();
               this.updateBuild();
-              this.config.log(
-                LogPayload.Start(
+              logger.log(
+                OperationLogger.Payload.Start(
                   getCodes().toList
                 )
               );
@@ -564,7 +564,7 @@ class EditorManager(val editor: JavaEditor) {
             throw new Exception("vm is not running");
           }
           case Some(_) => {
-            this.config.log(LogPayload.Stop());
+            logger.log(OperationLogger.Payload.Stop());
             await(exitVm())
             running = false;
           }
