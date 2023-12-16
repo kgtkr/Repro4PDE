@@ -1,6 +1,9 @@
 # Repro4PDE
 日本語README: [README_ja.md](README_ja.md)
 
+![demo](./demo.png)
+[demo video](./demo.mp4)
+
 ## Usage
 1. Open sketch
 2. Select Repro4PDE from the tools menu (Untitled sketches are not supported)

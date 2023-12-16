@@ -16,7 +16,7 @@ void draw() {
   
   for (int i = begin; i != end; i = (i + 1) % MAX_SIZE) {
     float c = (frameCount - count[i]) / (float)MAX_COUNT;
-    fill(255, 255 * c, 255 * c); 
+    fill(255, 255, 255 * c); 
     circle(xs[i], ys[i], 20);
   }
 
