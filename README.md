@@ -16,6 +16,8 @@ The random number seed value is fixed for program reproducibility. You can chang
 By pressing `Enable comparison with current code`, you can check the sketch, code, and behavior at the same time when you press the button. Events etc. are synchronized, making it easier to check operation.
 
 ## Limitation
+* Currently it cannot coexist with tools that use JavaFX.
+  * We are considering solutions such as running the user interface in a separate Java VM.
 * Does not support frame rate changes (only 60fps)
 * It is not supported to specify the renderer with the third argument of `size`
 * Programs with high CPU load may not work
