@@ -22,6 +22,28 @@ import java.nio.file.Paths
     }
   }
 
+  def toDefaultValue(c: Class[?]): String = {
+    if (c.isArray()) {
+      "null"
+    } else {
+      if (c.isPrimitive()) {
+        c.getName() match {
+          case "boolean" => "false"
+          case "byte"    => "0"
+          case "char"    => "'\u0000'"
+          case "short"   => "0"
+          case "int"     => "0"
+          case "long"    => "0L"
+          case "float"   => "0.0f"
+          case "double"  => "0.0d"
+          case "void"    => "()"
+        }
+      } else {
+        "null"
+      }
+    }
+  }
+
   val src = f"""
     package repro4pde.runtime;
 
@@ -32,7 +54,10 @@ import java.nio.file.Paths
     classOf[PGraphics]
       .getDeclaredMethods()
       .toList
-      .filter(_.getName().endsWith("Impl"))
+      .filter(m =>
+        m.getName().endsWith("Impl")
+          || m.getName() == "text"
+      )
       .filter(_.getName() != "textWidthImpl")
       .map(method =>
         f"""
@@ -45,6 +70,8 @@ import java.nio.file.Paths
             .getParameters()
             .map(p => p.getName())
             .mkString(", ")})
+        } else {
+          ${toDefaultValue(method.getReturnType())}
         }
       }
       """
