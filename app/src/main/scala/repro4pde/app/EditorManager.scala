@@ -21,7 +21,6 @@ import java.awt.Color
 import processing.app.SketchException
 import java.io.File
 import processing.mode.java.preproc.PreprocessorResult
-import scala.io.Source
 import java.io.PrintWriter
 import processing.app.Base
 import java.nio.file.Path
@@ -129,7 +128,11 @@ class EditorManager(val editor: JavaEditor) {
           srcFolder,
           className + ".java"
         );
-        val text = Source.fromFile(file).mkString;
+        val text = Files
+          .readString(
+            file.toPath(),
+            StandardCharsets.UTF_8
+          );
         val newText = text.replaceFirst(
           "extends PApplet",
           "extends repro4pde.runtime.PAppletRuntime"
