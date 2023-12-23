@@ -52,7 +52,7 @@ import scalafx.beans.property.DoubleProperty
 import processing.app.ui.EditorButton
 import processing.app.ui.EditorToolbar
 import processing.app.Language
-import repro4pde.ui.shared.{
+import repro4pde.view.shared.{
   EditorManagerCmd,
   EditorManagerEvent,
   Build,

@@ -32,7 +32,7 @@ import java.util.Random
 import cps.*
 import cps.monads.{*, given}
 import scala.util.boundary
-import repro4pde.ui.shared.{
+import repro4pde.view.shared.{
   EditorManagerCmd,
   EditorManagerEvent,
   Build,

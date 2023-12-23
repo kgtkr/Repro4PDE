@@ -1,4 +1,4 @@
-package repro4pde.ui.shared;
+package repro4pde.view.shared;
 
 enum EditorManagerCmd {
   case ReloadSketch(force: Boolean)
