@@ -44,6 +44,14 @@ lazy val runtimeSharedProject = project
     libraryDependencies ++= circeDependencies
   );
 
+lazy val uiSharedProject = project
+  .in(file("ui-shared"))
+  .settings(sharedSettings)
+  .settings(
+    name := "repro4pde-ui-shared",
+    libraryDependencies ++= circeDependencies
+  );
+
 lazy val utilsProject = project
   .in(file("utils"))
   .settings(sharedSettings)
@@ -88,7 +96,7 @@ lazy val toolProject = project
 
 lazy val appProject = project
   .in(file("app"))
-  .dependsOn(utilsProject, runtimeSharedProject)
+  .dependsOn(utilsProject, runtimeSharedProject, uiSharedProject)
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-app",
@@ -123,6 +131,7 @@ lazy val appProject = project
 lazy val allProjects = Seq(
   codegenProject,
   runtimeSharedProject,
+  uiSharedProject,
   utilsProject,
   runtimeProject,
   toolProject,

@@ -43,7 +43,6 @@ import scalafx.scene.layout.Region
 import scala.collection.mutable.Map as MMap
 import scalafx.scene.shape.SVGPath
 import scala.collection.mutable.Queue as MQueue
-import repro4pde.app.EditorManager.Event
 import scala.collection.SortedMap
 import scalafx.scene.image.Image
 import scala.collection.mutable.Set as MSet
@@ -53,6 +52,12 @@ import scalafx.beans.property.DoubleProperty
 import processing.app.ui.EditorButton
 import processing.app.ui.EditorToolbar
 import processing.app.Language
+import repro4pde.ui.shared.{
+  EditorManagerCmd,
+  EditorManagerEvent,
+  Build,
+  BuildCodeLine
+};
 
 enum PlayerState {
   case Playing;
@@ -267,7 +272,7 @@ object ControlPanel {
                         if (!editorManager.config.disableAutoReload) {
                           addQueue {
                             editorManager.send(
-                              EditorManager.Cmd.ReloadSketch(
+                              EditorManagerCmd.ReloadSketch(
                                 false
                               ),
                               donePromise {
@@ -313,7 +318,7 @@ object ControlPanel {
               } else {
                 addQueue {
                   editorManager.send(
-                    EditorManager.Cmd.Exit(),
+                    EditorManagerCmd.Exit(),
                     donePromise()
                   );
 
@@ -363,7 +368,7 @@ object ControlPanel {
                                 ) {
                                   addQueue {
                                     editorManager.send(
-                                      EditorManager.Cmd.UpdateLocation(
+                                      EditorManagerCmd.UpdateLocation(
                                         (value.value * 60).toInt
                                       ),
                                       donePromise {
@@ -386,35 +391,37 @@ object ControlPanel {
                           editorManager.listen { event =>
                             Platform.runLater {
                               event match {
-                                case EditorManager.Event
+                                case EditorManagerEvent
                                       .UpdateLocation(value2, max2) => {
                                   slider.max = max2.toDouble / 60
                                   if (!slider.valueChanging.value) {
                                     slider.value = value2.toDouble / 60
                                   }
                                 }
-                                case EditorManager.Event.Stopped(playing) => {
+                                case EditorManagerEvent.Stopped(playing) => {
                                   playerState.value =
                                     PlayerState.Stopped(playing)
                                 }
-                                case EditorManager.Event
+                                case EditorManagerEvent
                                       .CreatedBuild(build) => {
                                   currentBuildProperty.value = Some(build)
                                 }
-                                case Event.ClearLog() => {
+                                case EditorManagerEvent.ClearLog() => {
                                   slaveErrorProperty.value = None
                                 }
-                                case Event.LogError(slaveId, error) => {
+                                case EditorManagerEvent
+                                      .LogError(slaveId, error) => {
                                   if (slaveId.isDefined) {
                                     slaveErrorProperty.value = Some(error)
                                   }
                                 }
-                                case Event.AddedScreenshots(
+                                case EditorManagerEvent.AddedScreenshots(
                                       added
                                     ) => {
                                   screenshotPaths ++= added
                                 }
-                                case Event.ClearedScreenshots() => {
+                                case EditorManagerEvent
+                                      .ClearedScreenshots() => {
                                   screenshotPaths = SortedMap.empty[Int, String]
                                 }
                               }
@@ -511,7 +518,7 @@ object ControlPanel {
                                       case PlayerState.Playing
                                           if !editorManager.config.disablePause => {
                                         editorManager.send(
-                                          EditorManager.Cmd.PauseSketch(),
+                                          EditorManagerCmd.PauseSketch(),
                                           donePromise {
                                             playerState.value =
                                               PlayerState.Paused;
@@ -520,7 +527,7 @@ object ControlPanel {
                                       }
                                       case PlayerState.Paused => {
                                         editorManager.send(
-                                          EditorManager.Cmd.ResumeSketch(),
+                                          EditorManagerCmd.ResumeSketch(),
                                           donePromise {
                                             playerState.value =
                                               PlayerState.Playing;
@@ -529,7 +536,7 @@ object ControlPanel {
                                       }
                                       case PlayerState.Stopped(_) => {
                                         editorManager.send(
-                                          EditorManager.Cmd.StartSketch(),
+                                          EditorManagerCmd.StartSketch(),
                                           donePromise {
                                             playerState.value =
                                               PlayerState.Playing;
@@ -560,7 +567,7 @@ object ControlPanel {
                                 if (!loading.value) {
                                   addQueue {
                                     editorManager.send(
-                                      EditorManager.Cmd.StopSketch(),
+                                      EditorManagerCmd.StopSketch(),
                                       donePromise {
                                         playerState.value = PlayerState.Stopped(
                                           false
@@ -587,7 +594,7 @@ object ControlPanel {
                               if (!loading.value) {
                                 addQueue {
                                   editorManager.send(
-                                    EditorManager.Cmd.RegenerateState(),
+                                    EditorManagerCmd.RegenerateState(),
                                     donePromise()
                                   )
                                 }
@@ -624,7 +631,7 @@ object ControlPanel {
                                         case Some(slaveBuild) => {
                                           slaveBuildProperty.value = None
                                           editorManager.send(
-                                            EditorManager.Cmd.RemoveSlave(
+                                            EditorManagerCmd.RemoveSlave(
                                               slaveBuild.id
                                             ),
                                             donePromise()
@@ -634,7 +641,7 @@ object ControlPanel {
                                           slaveBuildProperty.value =
                                             Some(currentBuild)
                                           editorManager.send(
-                                            EditorManager.Cmd.AddSlave(
+                                            EditorManagerCmd.AddSlave(
                                               currentBuild.id
                                             ),
                                             donePromise()

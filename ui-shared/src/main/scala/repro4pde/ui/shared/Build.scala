@@ -1,4 +1,4 @@
-package repro4pde.app;
+package repro4pde.ui.shared;
 
 case class Build(
     id: Int,

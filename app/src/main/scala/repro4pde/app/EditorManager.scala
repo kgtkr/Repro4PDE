@@ -32,34 +32,16 @@ import java.util.Random
 import cps.*
 import cps.monads.{*, given}
 import scala.util.boundary
+import repro4pde.ui.shared.{
+  EditorManagerCmd,
+  EditorManagerEvent,
+  Build,
+  BuildCodeLine,
+  BuildCodeToken,
+  BuildCode
+};
 
 object EditorManager {
-  enum Cmd {
-    case ReloadSketch(force: Boolean)
-    case UpdateLocation(
-        frameCount: Int
-    )
-    case StartSketch()
-    case PauseSketch()
-    case ResumeSketch()
-    case StopSketch()
-    case Exit()
-    case AddSlave(id: Int)
-    case RemoveSlave(id: Int)
-    case RegenerateState()
-
-  }
-
-  enum Event {
-    case UpdateLocation(frameCount: Int, max: Int);
-    case Stopped(playing: Boolean);
-    case CreatedBuild(build: Build);
-    case ClearLog();
-    case LogError(slaveId: Option[Int], error: String);
-    case AddedScreenshots(screenshotPaths: Map[Int, String]);
-    case ClearedScreenshots();
-  }
-
   class SlaveVm(
       val vmManager: VmManager,
       val buildId: Int,
@@ -71,7 +53,7 @@ object EditorManager {
   class MasterVm(val vmManager: VmManager, val slaves: MMap[Int, SlaveVm]) {}
 
   enum Task {
-    case TCmd(cmd: Cmd, done: Promise[Unit])
+    case TCmd(cmd: EditorManagerCmd, done: Promise[Unit])
     case TMasterEvent(masterVm: MasterVm, event: VmManager.Event)
     case TSlaveEvent(slaveVm: SlaveVm, event: VmManager.Event)
   }
@@ -83,7 +65,7 @@ class EditorManager(val editor: JavaEditor) {
   import EditorManager._
 
   val taskQueue = new LinkedTransferQueue[Task]();
-  var eventListeners = List[Event => Unit]();
+  var eventListeners = List[EditorManagerEvent => Unit]();
   val (config, logger) = Config.loadConfig(editor.getSketch().getFolder());
 
   var frameCount = 0;
@@ -238,7 +220,7 @@ class EditorManager(val editor: JavaEditor) {
 
     this.builds += javaBuild;
     this.eventListeners.foreach(
-      _(Event.CreatedBuild(new Build(buildId, codes)))
+      _(EditorManagerEvent.CreatedBuild(new Build(buildId, codes)))
     );
   }
 
@@ -273,8 +255,8 @@ class EditorManager(val editor: JavaEditor) {
     assert(oMasterVm.isEmpty);
     editor.statusEmpty();
     editor.clearConsole();
-    eventListeners.foreach(_(Event.ClearLog()));
-    eventListeners.foreach(_(Event.ClearedScreenshots()));
+    eventListeners.foreach(_(EditorManagerEvent.ClearLog()));
+    eventListeners.foreach(_(EditorManagerEvent.ClearedScreenshots()));
 
     val slaveVms = MMap[Int, SlaveVm](
       slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
@@ -285,14 +267,14 @@ class EditorManager(val editor: JavaEditor) {
       runnerListener = new RunnerListenerEdtAdapter(editor) {
         override def statusError(x: Exception): Unit = {
           eventListeners.foreach(
-            _(Event.LogError(None, x.getMessage()))
+            _(EditorManagerEvent.LogError(None, x.getMessage()))
           );
           super.statusError(x);
         }
 
         override def statusError(x: String): Unit = {
           eventListeners.foreach(
-            _(Event.LogError(None, x))
+            _(EditorManagerEvent.LogError(None, x))
           );
           super.statusError(x);
         }
@@ -355,12 +337,12 @@ class EditorManager(val editor: JavaEditor) {
           override def startIndeterminate(): Unit = {}
           override def statusError(x$0: String): Unit = {
             eventListeners.foreach(
-              _(Event.LogError(Some(buildId), x$0))
+              _(EditorManagerEvent.LogError(Some(buildId), x$0))
             );
           }
           override def statusError(x$0: Exception): Unit = {
             eventListeners.foreach(
-              _(Event.LogError(Some(buildId), x$0.getMessage()))
+              _(EditorManagerEvent.LogError(Some(buildId), x$0.getMessage()))
             );
           }
           override def statusHalt(): Unit = {}
@@ -459,9 +441,9 @@ class EditorManager(val editor: JavaEditor) {
     }).start();
   }
 
-  private def processCmd(cmd: Cmd): Future[Unit] = async[Future] {
+  private def processCmd(cmd: EditorManagerCmd): Future[Unit] = async[Future] {
     cmd match {
-      case Cmd.ReloadSketch(force) =>
+      case EditorManagerCmd.ReloadSketch(force) =>
         boundary {
           val newCodes = getCodes().toMap;
           if (newCodes == prevCodes && !force) {
@@ -482,7 +464,7 @@ class EditorManager(val editor: JavaEditor) {
           }
 
         }
-      case Cmd.UpdateLocation(frameCount) => {
+      case EditorManagerCmd.UpdateLocation(frameCount) => {
         oMasterVm match {
           case Some(_) => {
             await(exitVm())
@@ -494,7 +476,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.StartSketch() => {
+      case EditorManagerCmd.StartSketch() => {
         oMasterVm match {
           case Some(masterVm) if masterVm.vmManager.isExited => {
             await(exitVm())
@@ -529,7 +511,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.PauseSketch() => {
+      case EditorManagerCmd.PauseSketch() => {
         oMasterVm match {
           case Some(masterVm) => {
             val p = Promise[Unit]();
@@ -545,7 +527,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.ResumeSketch() => {
+      case EditorManagerCmd.ResumeSketch() => {
         oMasterVm match {
           case Some(masterVm) => {
             val p = Promise[Unit]();
@@ -561,7 +543,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.StopSketch() => {
+      case EditorManagerCmd.StopSketch() => {
         oMasterVm match {
           case None => {
             throw new Exception("vm is not running");
@@ -573,7 +555,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.Exit() => {
+      case EditorManagerCmd.Exit() => {
         oMasterVm match {
           case Some(_) => {
             await(exitVm())
@@ -586,7 +568,7 @@ class EditorManager(val editor: JavaEditor) {
 
         isExit = true;
       }
-      case Cmd.AddSlave(id) => {
+      case EditorManagerCmd.AddSlave(id) => {
         if (slaves.contains(id)) {
           throw new Exception("slave is already added");
         } else {
@@ -606,7 +588,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.RemoveSlave(id) => {
+      case EditorManagerCmd.RemoveSlave(id) => {
         if (!slaves.contains(id)) {
           throw new Exception("slave is not added")
         } else {
@@ -622,7 +604,7 @@ class EditorManager(val editor: JavaEditor) {
           }
         }
       }
-      case Cmd.RegenerateState() => {
+      case EditorManagerCmd.RegenerateState() => {
         randomSeed = random.nextLong();
       }
     }
@@ -668,7 +650,7 @@ class EditorManager(val editor: JavaEditor) {
 
         this.eventListeners.foreach(
           _(
-            Event.UpdateLocation(
+            EditorManagerEvent.UpdateLocation(
               frameCount,
               this.maxFrameCount
             )
@@ -678,11 +660,11 @@ class EditorManager(val editor: JavaEditor) {
         this.masterLocation = Some(new java.awt.Point(windowX, windowY));
       }
       case VmManager.Event.Stopped() => {
-        this.eventListeners.foreach(_(Event.Stopped(this.running)))
+        this.eventListeners.foreach(_(EditorManagerEvent.Stopped(this.running)))
       }
       case VmManager.Event.AddedScreenshots(screenshotPaths) => {
         this.eventListeners.foreach(
-          _(Event.AddedScreenshots(screenshotPaths))
+          _(EditorManagerEvent.AddedScreenshots(screenshotPaths))
         )
       }
     }
@@ -709,11 +691,11 @@ class EditorManager(val editor: JavaEditor) {
     }
   }
 
-  def send(cmd: Cmd, done: Promise[Unit]) = {
+  def send(cmd: EditorManagerCmd, done: Promise[Unit]) = {
     taskQueue.put(TCmd(cmd, done));
   }
 
-  def listen(listener: Event => Unit) = {
+  def listen(listener: EditorManagerEvent => Unit) = {
     eventListeners = listener :: eventListeners;
   }
 }
