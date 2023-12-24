@@ -25,7 +25,6 @@ import scalafx.scene.text.TextFlow
 import scalafx.scene.layout.GridPane
 import scalafx.scene.layout.ColumnConstraints
 import scalafx.scene.layout.Pane
-import scalafx.stage.Stage
 import scalafx.scene.layout.BorderPane
 import scalafx.scene.control.ScrollPane
 import scalafx.geometry.Pos
@@ -49,7 +48,17 @@ import scala.collection.mutable.Set as MSet
 import scala.util.Success
 import scala.util.Failure
 import scala.jdk.CollectionConverters._
-import repro4pde.utils.ext._;
+import scalafx.application.JFXApp3
+import io.circe._, io.circe.parser._
+import java.net.UnixDomainSocketAddress
+import java.nio.channels.SocketChannel
+import java.net.StandardProtocolFamily
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.nio.channels.Channels
+import java.nio.charset.StandardCharsets
+import scala.collection.mutable.{Map => MMap}
+import java.nio.channels.ClosedByInterruptException
 
 enum PlayerState {
   case Playing;
@@ -57,19 +66,38 @@ enum PlayerState {
   case Stopped(nextPlaying: Boolean) // nextPlaying: reload時に自動再生される状態か
 }
 
-object View {
-  def init() = {
-    Platform.implicitExit = false;
-    Platform.startup(() => {});
-  }
-}
-
-class View(language: String, config: Config) {
-  val locale = Locale.getLocale(language)
-  val cmdQueue = new LinkedTransferQueue[ViewCmd]();
+object View extends JFXApp3 {
+  var config: Config = null;
+  var locale: Locale = null;
   val appCmdQueue = new LinkedTransferQueue[AppCmd]();
+  var requestIdCounter = 0;
+  val requestIdMap = MMap[Int, Promise[Unit]]();
 
-  def start() = {
+  override def start(): Unit = {
+    val sockPath = parameters.raw(0);
+    val language = parameters.raw(1);
+    config = decode[Config](parameters.raw(2)).right.get;
+    locale = Locale.getLocale(language)
+
+    val sc = {
+      val sockAddr = UnixDomainSocketAddress.of(sockPath);
+      val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
+      sc.connect(sockAddr);
+      sc
+    };
+
+    new Thread(() => {
+      for (
+        cmd <- Iterator
+          .continually {
+            appCmdQueue.take()
+          }
+      ) {
+        val bytes = cmd.toBytes();
+        sc.write(bytes);
+      }
+    }).start();
+
     val loading = BooleanProperty(false);
     val queue = new MQueue[() => Unit]();
     def addQueue(f: => Unit) = {
@@ -202,438 +230,461 @@ class View(language: String, config: Config) {
     }
 
     var closeClickCount = 0;
-    Platform.runLater(() => {
-      val stage = new Stage {
-        title = "Repro4PDE"
-        scene = new Scene(600, 300) {
-          fill = Color.rgb(240, 240, 240)
-          content = new BorderPane {
-            prefHeight <== scene.height
-            prefWidth <== scene.width
-            style = "-fx-font: normal bold 10pt sans-serif"
-            padding = Insets(50, 80, 50, 80)
-            center = new VBox {
-              children = Seq(
-                new VBox {
-                  if (!config.disableRepro) {
-                    children += new HBox {
-                      alignment = Pos.Center
-                      children = Seq(
-                        new Slider(0, 0, 0) {
-                          disable <== Bindings.createBooleanBinding(
-                            () => loading.value,
-                            loading
+    stage = new JFXApp3.PrimaryStage {
+      title = "Repro4PDE"
+      scene = new Scene(600, 300) {
+        fill = Color.rgb(240, 240, 240)
+        content = new BorderPane {
+          prefHeight <== scene.height
+          prefWidth <== scene.width
+          style = "-fx-font: normal bold 10pt sans-serif"
+          padding = Insets(50, 80, 50, 80)
+          center = new VBox {
+            children = Seq(
+              new VBox {
+                if (!config.disableRepro) {
+                  children += new HBox {
+                    alignment = Pos.Center
+                    children = Seq(
+                      new Slider(0, 0, 0) {
+                        disable <== Bindings.createBooleanBinding(
+                          () => loading.value,
+                          loading
+                        )
+                        value <==> sliderValueProperty
+                        max <==> sliderMaxProperty
+                        valueChanging <==> sliderValueChangingProperty
+                        onMouseMoved = e => {
+                          val mouseX = if e.getX.isNaN then 0 else e.getX
+                          val mouseValue =
+                            (mouseX / width.value) * (max.value - min.value) + min.value
+                          mouseHoverSliderValueProperty.value = Some(
+                            (mouseValue * 60).toInt
                           )
-                          value <==> sliderValueProperty
-                          max <==> sliderMaxProperty
-                          valueChanging <==> sliderValueChangingProperty
-                          onMouseMoved = e => {
-                            val mouseX = if e.getX.isNaN then 0 else e.getX
-                            val mouseValue =
-                              (mouseX / width.value) * (max.value - min.value) + min.value
-                            mouseHoverSliderValueProperty.value = Some(
-                              (mouseValue * 60).toInt
-                            )
-                            screenshotXProperty.value = e.getScreenX
-                            screenshotYProperty.value = e.getScreenY
-                          }
-                          onMouseExited = _ => {
-                            mouseHoverSliderValueProperty.value = None
-                          }
-                          valueChanging.addListener({
-                            (_, oldChanging, changing) =>
-                              if (oldChanging && !changing && !loading.value) {
-                                addQueue {
-                                  editorManagerCmdSend(
-                                    EditorManagerCmd.UpdateLocation(
-                                      (value.value * 60).toInt
-                                    ),
-                                    donePromise {
-                                      if (
-                                        playerState.value == PlayerState
-                                          .Stopped(
-                                            true
-                                          )
-                                      ) {
-                                        playerState.value = PlayerState.Playing;
-                                      }
-                                    }
-                                  );
-                                }
-                              }
-                              ()
-                          })
-                        },
-                        new Text {
-                          text <== Bindings.createStringBinding(
-                            () =>
-                              f"${sliderValueProperty.intValue()}%d${locale.secound}/ ${sliderMaxProperty
-                                  .intValue()}%d${locale.secound}",
-                            sliderValueProperty,
-                            sliderMaxProperty
-                          )
+                          screenshotXProperty.value = e.getScreenX
+                          screenshotYProperty.value = e.getScreenY
                         }
-                      )
-
-                      new Popup {
-                        content += new ImageView {
-                          image <== Bindings.createObjectBinding(
-                            () => {
-                              screenshotProperty.value
-                                .map(_.delegate)
-                                .orNull
-                            },
-                            screenshotProperty
-                          )
-                          fitWidth = 150
-                          preserveRatio = true
+                        onMouseExited = _ => {
+                          mouseHoverSliderValueProperty.value = None
                         }
-                        screenshotProperty.onChange { (_, oldV, newV) =>
-                          val oldDefined = oldV.isDefined
-                          val newDefined = newV.isDefined
-                          if (oldDefined != newDefined) {
-                            if (newDefined) {
-                              this.show(
-                                scene.value.getWindow,
-                                screenshotXProperty.value - 75,
-                                screenshotYProperty.value + 20
-                              )
-                            } else {
-                              hide()
-                            }
-                          }
-                        }
-                        screenshotXProperty.onChange { (_, _, _) =>
-                          this.setX(screenshotXProperty.value - 75)
-                        }
-                      };
-                    }
-                  }
-                  children ++= Seq(
-                    new HBox(10) {
-                      alignment = Pos.Center
-                      children = Seq(
-                        new Button {
-                          val SIZE = 25;
-                          prefWidth = SIZE
-                          prefHeight = SIZE
-                          minWidth = SIZE
-                          minHeight = SIZE
-                          graphic = new SVGPath {
-                            scaleX = 0.015
-                            scaleY = 0.015
-                            content <== Bindings.createStringBinding(
-                              () =>
-                                if (playerState.value == PlayerState.Playing) {
-                                  if (config.disablePause) {
-                                    SVGResources.play
-                                  } else {
-                                    SVGResources.pause
-                                  }
-                                } else {
-                                  SVGResources.play
-                                },
-                              playerState
-                            )
-                            fill = Black
-                          }
-                          disable <== Bindings.createBooleanBinding(
-                            () =>
-                              loading.value || (config.disablePause && playerState.value == PlayerState.Playing),
-                            loading,
-                            playerState
-                          )
-                          onAction = _ => {
-                            if (!loading.value) {
-                              addQueue {
-                                playerState.value match {
-                                  case PlayerState.Playing
-                                      if !config.disablePause => {
-                                    editorManagerCmdSend(
-                                      EditorManagerCmd.PauseSketch(),
-                                      donePromise {
-                                        playerState.value = PlayerState.Paused;
-                                      }
-                                    )
-                                  }
-                                  case PlayerState.Paused => {
-                                    editorManagerCmdSend(
-                                      EditorManagerCmd.ResumeSketch(),
-                                      donePromise {
-                                        playerState.value = PlayerState.Playing;
-                                      }
-                                    )
-                                  }
-                                  case PlayerState.Stopped(_) => {
-                                    editorManagerCmdSend(
-                                      EditorManagerCmd.StartSketch(),
-                                      donePromise {
-                                        playerState.value = PlayerState.Playing;
-                                      }
-                                    )
-                                  }
-                                  case _ => {}
-                                }
-                              }
-                            }
-
-                          }
-                        },
-                        new Button {
-                          val SIZE = 25;
-                          prefWidth = SIZE
-                          prefHeight = SIZE
-                          minWidth = SIZE
-                          minHeight = SIZE
-                          graphic = new SVGPath {
-                            scaleX = 0.015
-                            scaleY = 0.015
-                            content = SVGResources.stop
-                            fill = Black
-                          }
-                          disable <== loading
-                          onAction = _ => {
-                            if (!loading.value) {
+                        valueChanging.addListener({
+                          (_, oldChanging, changing) =>
+                            if (oldChanging && !changing && !loading.value) {
                               addQueue {
                                 editorManagerCmdSend(
-                                  EditorManagerCmd.StopSketch(),
+                                  EditorManagerCmd.UpdateLocation(
+                                    (value.value * 60).toInt
+                                  ),
                                   donePromise {
-                                    playerState.value = PlayerState.Stopped(
-                                      false
-                                    );
+                                    if (
+                                      playerState.value == PlayerState
+                                        .Stopped(
+                                          true
+                                        )
+                                    ) {
+                                      playerState.value = PlayerState.Playing;
+                                    }
                                   }
-                                )
+                                );
                               }
                             }
+                            ()
+                        })
+                      },
+                      new Text {
+                        text <== Bindings.createStringBinding(
+                          () =>
+                            f"${sliderValueProperty.intValue()}%d${locale.secound}/ ${sliderMaxProperty
+                                .intValue()}%d${locale.secound}",
+                          sliderValueProperty,
+                          sliderMaxProperty
+                        )
+                      }
+                    )
 
+                    new Popup {
+                      content += new ImageView {
+                        image <== Bindings.createObjectBinding(
+                          () => {
+                            screenshotProperty.value
+                              .map(_.delegate)
+                              .orNull
+                          },
+                          screenshotProperty
+                        )
+                        fitWidth = 150
+                        preserveRatio = true
+                      }
+                      screenshotProperty.onChange { (_, oldV, newV) =>
+                        val oldDefined = oldV.isDefined
+                        val newDefined = newV.isDefined
+                        if (oldDefined != newDefined) {
+                          if (newDefined) {
+                            this.show(
+                              scene.value.getWindow,
+                              screenshotXProperty.value - 75,
+                              screenshotYProperty.value + 20
+                            )
+                          } else {
+                            hide()
                           }
                         }
-                      )
-                    }
-                  )
+                      }
+                      screenshotXProperty.onChange { (_, _, _) =>
+                        this.setX(screenshotXProperty.value - 75)
+                      }
+                    };
+                  }
+                }
+                children ++= Seq(
+                  new HBox(10) {
+                    alignment = Pos.Center
+                    children = Seq(
+                      new Button {
+                        val SIZE = 25;
+                        prefWidth = SIZE
+                        prefHeight = SIZE
+                        minWidth = SIZE
+                        minHeight = SIZE
+                        graphic = new SVGPath {
+                          scaleX = 0.015
+                          scaleY = 0.015
+                          content <== Bindings.createStringBinding(
+                            () =>
+                              if (playerState.value == PlayerState.Playing) {
+                                if (config.disablePause) {
+                                  SVGResources.play
+                                } else {
+                                  SVGResources.pause
+                                }
+                              } else {
+                                SVGResources.play
+                              },
+                            playerState
+                          )
+                          fill = Black
+                        }
+                        disable <== Bindings.createBooleanBinding(
+                          () =>
+                            loading.value || (config.disablePause && playerState.value == PlayerState.Playing),
+                          loading,
+                          playerState
+                        )
+                        onAction = _ => {
+                          if (!loading.value) {
+                            addQueue {
+                              playerState.value match {
+                                case PlayerState.Playing
+                                    if !config.disablePause => {
+                                  editorManagerCmdSend(
+                                    EditorManagerCmd.PauseSketch(),
+                                    donePromise {
+                                      playerState.value = PlayerState.Paused;
+                                    }
+                                  )
+                                }
+                                case PlayerState.Paused => {
+                                  editorManagerCmdSend(
+                                    EditorManagerCmd.ResumeSketch(),
+                                    donePromise {
+                                      playerState.value = PlayerState.Playing;
+                                    }
+                                  )
+                                }
+                                case PlayerState.Stopped(_) => {
+                                  editorManagerCmdSend(
+                                    EditorManagerCmd.StartSketch(),
+                                    donePromise {
+                                      playerState.value = PlayerState.Playing;
+                                    }
+                                  )
+                                }
+                                case _ => {}
+                              }
+                            }
+                          }
 
-                  if (!config.disableRepro) {
-                    children += new HBox(10) {
-                      alignment = Pos.Center
-
-                      children += new Button {
-                        text = locale.regenerateState
+                        }
+                      },
+                      new Button {
+                        val SIZE = 25;
+                        prefWidth = SIZE
+                        prefHeight = SIZE
+                        minWidth = SIZE
+                        minHeight = SIZE
+                        graphic = new SVGPath {
+                          scaleX = 0.015
+                          scaleY = 0.015
+                          content = SVGResources.stop
+                          fill = Black
+                        }
                         disable <== loading
                         onAction = _ => {
                           if (!loading.value) {
                             addQueue {
                               editorManagerCmdSend(
-                                EditorManagerCmd.RegenerateState(),
-                                donePromise()
+                                EditorManagerCmd.StopSketch(),
+                                donePromise {
+                                  playerState.value = PlayerState.Stopped(
+                                    false
+                                  );
+                                }
                               )
                             }
                           }
+
                         }
                       }
+                    )
+                  }
+                )
 
-                      if (!config.disableComparison) {
-                        children += new Button {
-                          text <== Bindings.createStringBinding(
-                            () =>
-                              if (slaveBuildProperty.value.isDefined) {
-                                locale.disableComparison
-                              } else {
-                                locale.enableComparison
-                              },
-                            slaveBuildProperty
-                          )
-                          disable <==
-                            Bindings.createBooleanBinding(
-                              () =>
-                                loading.value || currentBuildProperty.value.isEmpty,
-                              loading,
-                              currentBuildProperty
+                if (!config.disableRepro) {
+                  children += new HBox(10) {
+                    alignment = Pos.Center
+
+                    children += new Button {
+                      text = locale.regenerateState
+                      disable <== loading
+                      onAction = _ => {
+                        if (!loading.value) {
+                          addQueue {
+                            editorManagerCmdSend(
+                              EditorManagerCmd.RegenerateState(),
+                              donePromise()
                             )
-                          onAction = _ => {
-                            (
-                              loading.value,
-                              currentBuildProperty.value
-                            ) match {
-                              case (false, Some(currentBuild)) => {
-                                addQueue {
-                                  slaveBuildProperty.value match {
-                                    case Some(slaveBuild) => {
-                                      slaveBuildProperty.value = None
-                                      editorManagerCmdSend(
-                                        EditorManagerCmd.RemoveSlave(
-                                          slaveBuild.id
-                                        ),
-                                        donePromise()
-                                      )
-                                    }
-                                    case None => {
-                                      slaveBuildProperty.value =
-                                        Some(currentBuild)
-                                      editorManagerCmdSend(
-                                        EditorManagerCmd.AddSlave(
-                                          currentBuild.id
-                                        ),
-                                        donePromise()
-                                      )
-                                    }
+                          }
+                        }
+                      }
+                    }
+
+                    if (!config.disableComparison) {
+                      children += new Button {
+                        text <== Bindings.createStringBinding(
+                          () =>
+                            if (slaveBuildProperty.value.isDefined) {
+                              locale.disableComparison
+                            } else {
+                              locale.enableComparison
+                            },
+                          slaveBuildProperty
+                        )
+                        disable <==
+                          Bindings.createBooleanBinding(
+                            () =>
+                              loading.value || currentBuildProperty.value.isEmpty,
+                            loading,
+                            currentBuildProperty
+                          )
+                        onAction = _ => {
+                          (
+                            loading.value,
+                            currentBuildProperty.value
+                          ) match {
+                            case (false, Some(currentBuild)) => {
+                              addQueue {
+                                slaveBuildProperty.value match {
+                                  case Some(slaveBuild) => {
+                                    slaveBuildProperty.value = None
+                                    editorManagerCmdSend(
+                                      EditorManagerCmd.RemoveSlave(
+                                        slaveBuild.id
+                                      ),
+                                      donePromise()
+                                    )
+                                  }
+                                  case None => {
+                                    slaveBuildProperty.value =
+                                      Some(currentBuild)
+                                    editorManagerCmdSend(
+                                      EditorManagerCmd.AddSlave(
+                                        currentBuild.id
+                                      ),
+                                      donePromise()
+                                    )
                                   }
                                 }
                               }
-                              case _ => {}
                             }
-
+                            case _ => {}
                           }
-                        };
+
+                        }
+                      };
+                    }
+                  }
+                }
+              },
+              new Pane {
+                vgrow = Priority.Always
+                hgrow = Priority.Always
+                diffNodeProperty.onChange { (_, _, _) =>
+                  val node = diffNodeProperty.value;
+                  node.prefHeight <== height
+                  node.prefWidth <== width
+                  children = Seq(node)
+                }
+              },
+              new TextFlow {
+                children = Seq(
+                  new Text {
+                    text <== Bindings.createStringBinding(
+                      () =>
+                        (
+                          slaveBuildProperty.value,
+                          slaveErrorProperty.value
+                        ) match {
+                          case (Some(_), Some(error)) => {
+                            locale.slaveError + ": " + error
+                          }
+                          case _ => {
+                            ""
+                          }
+                        },
+                      slaveErrorProperty,
+                      slaveBuildProperty
+                    )
+                    fill = Red
+                  }
+                )
+              }
+            )
+          }
+        }
+      }
+    };
+
+    val cmdProcessThread =
+      new Thread(() => {
+        val bs = new BufferedReader(
+          new InputStreamReader(
+            Channels.newInputStream(sc),
+            StandardCharsets.UTF_8
+          )
+        );
+
+        for (
+          line <- Iterator
+            .continually {
+              try {
+                bs.readLine()
+              } catch {
+                case e: ClosedByInterruptException => {
+                  null
+                }
+              }
+            }
+            .takeWhile(_ != null)
+        ) {
+          val cmd = ViewCmd.fromJSON(line);
+          cmd match {
+            case ViewCmd.EditorManagerEvent(event) => {
+              Platform.runLater {
+                event match {
+                  case EditorManagerEvent
+                        .UpdateLocation(value2, max2) => {
+                    sliderMaxProperty.value = max2.toDouble / 60
+                    if (!sliderValueChangingProperty.value) {
+                      sliderValueProperty.value = value2.toDouble / 60
+                    }
+                  }
+                  case EditorManagerEvent.Stopped(
+                        playing
+                      ) => {
+                    playerState.value = PlayerState.Stopped(playing)
+                  }
+                  case EditorManagerEvent
+                        .CreatedBuild(build) => {
+                    currentBuildProperty.value = Some(build)
+                  }
+                  case EditorManagerEvent.ClearLog() => {
+                    slaveErrorProperty.value = None
+                  }
+                  case EditorManagerEvent
+                        .LogError(slaveId, error) => {
+                    if (slaveId.isDefined) {
+                      slaveErrorProperty.value = Some(error)
+                    }
+                  }
+                  case EditorManagerEvent.AddedScreenshots(
+                        added
+                      ) => {
+                    screenshotPaths ++= added
+                  }
+                  case EditorManagerEvent
+                        .ClearedScreenshots() => {
+                    screenshotPaths = SortedMap.empty[Int, String]
+                  }
+                }
+              }
+            }
+            case ViewCmd.FocusRequest() => {
+              Platform.runLater {
+                stage.requestFocus()
+              }
+            }
+            case ViewCmd.FileChanged() => {
+              Platform.runLater {
+                if (!config.disableAutoReload) {
+                  addQueue {
+                    editorManagerCmdSend(
+                      EditorManagerCmd.ReloadSketch(
+                        false
+                      ),
+                      donePromise {
+                        if (
+                          playerState.value == PlayerState
+                            .Stopped(
+                              true
+                            )
+                        ) {
+                          playerState.value = PlayerState.Playing;
+                        }
                       }
-                    }
+                    )
                   }
-                },
-                new Pane {
-                  vgrow = Priority.Always
-                  hgrow = Priority.Always
-                  diffNodeProperty.onChange { (_, _, _) =>
-                    val node = diffNodeProperty.value;
-                    node.prefHeight <== height
-                    node.prefWidth <== width
-                    children = Seq(node)
+                }
+
+              }
+            }
+            case ViewCmd.EditorManagerCmdFinished(requestId, error) => {
+              val done = requestIdMap.synchronized {
+                val done = requestIdMap(requestId);
+                requestIdMap -= requestId
+                done
+              }
+
+              done.complete(
+                error match {
+                  case Some(error) => {
+                    Failure(new Exception(error))
                   }
-                },
-                new TextFlow {
-                  children = Seq(
-                    new Text {
-                      text <== Bindings.createStringBinding(
-                        () =>
-                          (
-                            slaveBuildProperty.value,
-                            slaveErrorProperty.value
-                          ) match {
-                            case (Some(_), Some(error)) => {
-                              locale.slaveError + ": " + error
-                            }
-                            case _ => {
-                              ""
-                            }
-                          },
-                        slaveErrorProperty,
-                        slaveBuildProperty
-                      )
-                      fill = Red
-                    }
-                  )
+                  case None => {
+                    Success(())
+                  }
                 }
               )
             }
           }
         }
-      };
+      });
+    cmdProcessThread.start();
 
-      val cmdProcessThread =
-        new Thread(() => {
-          for (
-            cmd <- Iterator
-              .continually({
-                try {
-                  Some(cmdQueue.take())
-                } catch {
-                  case e: InterruptedException => {
-                    None
-                  }
-                }
-              })
-              .mapWhile(identity)
-          ) {
-            cmd match {
-              case ViewCmd.EditorManagerEvent(event) => {
-                Platform.runLater {
-                  event match {
-                    case EditorManagerEvent
-                          .UpdateLocation(value2, max2) => {
-                      sliderMaxProperty.value = max2.toDouble / 60
-                      if (!sliderValueChangingProperty.value) {
-                        sliderValueProperty.value = value2.toDouble / 60
-                      }
-                    }
-                    case EditorManagerEvent.Stopped(
-                          playing
-                        ) => {
-                      playerState.value = PlayerState.Stopped(playing)
-                    }
-                    case EditorManagerEvent
-                          .CreatedBuild(build) => {
-                      currentBuildProperty.value = Some(build)
-                    }
-                    case EditorManagerEvent.ClearLog() => {
-                      slaveErrorProperty.value = None
-                    }
-                    case EditorManagerEvent
-                          .LogError(slaveId, error) => {
-                      if (slaveId.isDefined) {
-                        slaveErrorProperty.value = Some(error)
-                      }
-                    }
-                    case EditorManagerEvent.AddedScreenshots(
-                          added
-                        ) => {
-                      screenshotPaths ++= added
-                    }
-                    case EditorManagerEvent
-                          .ClearedScreenshots() => {
-                      screenshotPaths = SortedMap.empty[Int, String]
-                    }
-                  }
-                }
-              }
-              case ViewCmd.FocusRequest() => {
-                Platform.runLater {
-                  stage.requestFocus()
-                }
-              }
-              case ViewCmd.FileChanged() => {
-                Platform.runLater {
-                  if (!config.disableAutoReload) {
-                    addQueue {
-                      editorManagerCmdSend(
-                        EditorManagerCmd.ReloadSketch(
-                          false
-                        ),
-                        donePromise {
-                          if (
-                            playerState.value == PlayerState
-                              .Stopped(
-                                true
-                              )
-                          ) {
-                            playerState.value = PlayerState.Playing;
-                          }
-                        }
-                      )
-                    }
-                  }
-
-                }
-              }
-            }
-          }
-        });
-      cmdProcessThread.start();
-
-      stage.onCloseRequest = evt => {
-        if (config.disableCloseWindow && closeClickCount < 10) {
-          closeClickCount += 1;
-          evt.consume();
-        } else {
-          addQueue {
-            editorManagerCmdSend(
-              EditorManagerCmd.Exit(),
-              donePromise()
-            );
-          }
-          cmdProcessThread.interrupt();
-          appCmdQueue.add(AppCmd.Exit());
+    stage.onCloseRequest = evt => {
+      if (config.disableCloseWindow && closeClickCount < 10) {
+        closeClickCount += 1;
+        evt.consume();
+      } else {
+        addQueue {
+          editorManagerCmdSend(
+            EditorManagerCmd.Exit(),
+            donePromise()
+          );
         }
+        cmdProcessThread.interrupt();
+        appCmdQueue.add(AppCmd.Exit());
       }
-      stage.show();
-    });
+    }
   }
 
   private def createDiffNode(sourceBuild: Build, targetBuild: Build): Region = {
@@ -951,6 +1002,11 @@ class View(language: String, config: Config) {
   }
 
   def editorManagerCmdSend(cmd: EditorManagerCmd, done: Promise[Unit]) = {
-    appCmdQueue.add(AppCmd.EditorManagerCmd(cmd, done))
+    val requestId = requestIdCounter;
+    requestIdCounter += 1;
+    requestIdMap.synchronized {
+      requestIdMap += (requestId -> done);
+    }
+    appCmdQueue.add(AppCmd.EditorManagerCmd(cmd, requestId));
   }
 }

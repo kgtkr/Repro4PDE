@@ -7,7 +7,8 @@ lazy val processingTool = new ProcessingTool(
   allProjects,
   toolProject,
   appProject,
-  runtimeProject
+  runtimeProject,
+  viewProject
 );
 
 lazy val circeDependencies = Seq(
@@ -128,7 +129,7 @@ lazy val toolProject = project
 
 lazy val appProject = project
   .in(file("app"))
-  .dependsOn(utilsProject, runtimeSharedProject, viewSharedProject, viewProject)
+  .dependsOn(utilsProject, runtimeSharedProject, viewSharedProject)
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-app",

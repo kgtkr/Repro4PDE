@@ -10,7 +10,8 @@ class ProcessingTool(
     allProjects: Seq[Project],
     toolProject: Project,
     appProject: Project,
-    runtimeProject: Project
+    runtimeProject: Project,
+    viewProject: Project
 ) {
   lazy val buildToolBaseTask = Def.task {
     val excludeProcessingCp =
@@ -72,6 +73,23 @@ class ProcessingTool(
     IO.write(
       libDir / "runtime-classpath.txt",
       runtimeCp.map(_.getName()).mkString(","),
+      StandardCharsets.UTF_8
+    )
+
+    val viewCp =
+      filterDependencies((viewProject / Runtime / fullClasspathAsJars).value)
+        .map(_.data);
+
+    for (file <- viewCp) {
+      IO.copyFile(
+        file,
+        libDir / file.getName()
+      )
+    }
+
+    IO.write(
+      libDir / "view-classpath.txt",
+      viewCp.map(_.getName()).mkString(","),
       StandardCharsets.UTF_8
     )
 

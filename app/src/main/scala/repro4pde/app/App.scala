@@ -2,7 +2,6 @@ package repro4pde.app;
 
 import processing.app.Base
 import processing.mode.java.JavaEditor
-import repro4pde.view.View
 
 object Repro4PDEApp {
   var toolName: String = null
@@ -13,7 +12,6 @@ object Repro4PDEApp {
     this.base = base
     Repro4PDEApp.toolName = toolName
     Repro4PDEApp.isDebug = toolName == "Repro4PDEDev"
-    View.init()
   }
 
   def run() = {
@@ -21,7 +19,7 @@ object Repro4PDEApp {
     if (editor.getSketch().isUntitled()) {
       editor.statusError("Repro4PDE not support untitled sketch")
     } else {
-      ControlPanel.show(editor)
+      ViewManager.show(editor)
     }
   }
 }

@@ -1,4 +1,5 @@
 package repro4pde.view.shared;
+import io.circe._, io.circe.generic.semiauto._
 
 enum EditorManagerCmd {
   case ReloadSketch(force: Boolean)
@@ -15,6 +16,11 @@ enum EditorManagerCmd {
   case RegenerateState()
 }
 
+object EditorManagerCmd {
+  implicit val encoder: Encoder[EditorManagerCmd] = deriveEncoder
+  implicit val decoder: Decoder[EditorManagerCmd] = deriveDecoder
+}
+
 enum EditorManagerEvent {
   case UpdateLocation(frameCount: Int, max: Int);
   case Stopped(playing: Boolean);
@@ -23,4 +29,9 @@ enum EditorManagerEvent {
   case LogError(slaveId: Option[Int], error: String);
   case AddedScreenshots(screenshotPaths: Map[Int, String]);
   case ClearedScreenshots();
+}
+
+object EditorManagerEvent {
+  implicit val encoder: Encoder[EditorManagerEvent] = deriveEncoder
+  implicit val decoder: Decoder[EditorManagerEvent] = deriveDecoder
 }
