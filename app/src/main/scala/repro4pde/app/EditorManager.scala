@@ -40,6 +40,11 @@ import repro4pde.view.shared.{
   BuildCodeToken,
   BuildCode
 };
+import repro4pde.view.shared.Config
+import java.util.Properties
+import java.io.FileInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
 
 object EditorManager {
   class SlaveVm(
@@ -59,6 +64,46 @@ object EditorManager {
   }
   export Task._
 
+  def loadConfig(base: File): (Config, OperationLogger) = {
+    val appBase = new File(base, ".repro4pde")
+    val configFile = new File(appBase, "repro4pde.properties")
+    val config = if (!configFile.exists()) {
+      Config();
+    } else {
+      val properties = new Properties()
+      properties.load(new FileInputStream(configFile));
+      val config = Config(
+        logFile = if (properties.getProperty("logging", "false").toBoolean) {
+          val timestamp =
+            SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date())
+          val random = scala.util.Random.alphanumeric.take(4).mkString
+          Some(
+            new File(appBase, s"repro4pde-$timestamp-$random.log")
+              .getAbsolutePath()
+          )
+        } else {
+          None
+        },
+        disableComparison =
+          properties.getProperty("disableComparison", "false").toBoolean,
+        disableAutoReload =
+          properties.getProperty("disableAutoReload", "false").toBoolean,
+        disableRepro =
+          properties.getProperty("disableRepro", "false").toBoolean,
+        disablePause =
+          properties.getProperty("disablePause", "false").toBoolean,
+        disablePdeButton =
+          properties.getProperty("disablePdeButton", "false").toBoolean,
+        disableCloseWindow =
+          properties.getProperty("disableCloseWindow", "false").toBoolean
+      );
+      config
+    }
+    val logger = new OperationLogger(config.logFile.map(new File(_)))
+
+    logger.log(OperationLogger.Payload.Init())
+    (config, logger)
+  }
 }
 
 class EditorManager(val editor: JavaEditor) {
@@ -66,7 +111,7 @@ class EditorManager(val editor: JavaEditor) {
 
   val taskQueue = new LinkedTransferQueue[Task]();
   var eventListeners = List[EditorManagerEvent => Unit]();
-  val (config, logger) = Config.loadConfig(editor.getSketch().getFolder());
+  val (config, logger) = loadConfig(editor.getSketch().getFolder());
 
   var frameCount = 0;
   var maxFrameCount = 0;
@@ -698,4 +743,5 @@ class EditorManager(val editor: JavaEditor) {
   def listen(listener: EditorManagerEvent => Unit) = {
     eventListeners = listener :: eventListeners;
   }
+
 }

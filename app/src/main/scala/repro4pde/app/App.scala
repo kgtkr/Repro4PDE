@@ -2,6 +2,7 @@ package repro4pde.app;
 
 import processing.app.Base
 import processing.mode.java.JavaEditor
+import repro4pde.view.View
 
 object Repro4PDEApp {
   var toolName: String = null
@@ -12,7 +13,7 @@ object Repro4PDEApp {
     this.base = base
     Repro4PDEApp.toolName = toolName
     Repro4PDEApp.isDebug = toolName == "Repro4PDEDev"
-    ControlPanel.init()
+    View.init()
   }
 
   def run() = {
