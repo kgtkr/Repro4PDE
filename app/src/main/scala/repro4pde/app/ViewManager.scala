@@ -12,7 +12,7 @@ import scala.collection.mutable.Map as MMap
 import processing.app.ui.EditorButton
 import processing.app.ui.EditorToolbar
 import processing.app.Language
-import repro4pde.view.shared.{AppCmd, ViewCmd};
+import repro4pde.view.shared.{ViewEvent, ViewCmd};
 import scala.jdk.CollectionConverters._
 import java.util.concurrent.LinkedTransferQueue
 import scala.concurrent.Promise
@@ -57,7 +57,7 @@ object ViewManager {
 
 class ViewManager(editor: JavaEditor) {
   val cmdQueue = new LinkedTransferQueue[ViewCmd]();
-  val appCmdQueue = new LinkedTransferQueue[AppCmd]();
+  val viewEventQueue = new LinkedTransferQueue[ViewEvent]();
 
   def start() = {
     val runtimeDir = Files.createTempDirectory("repro4pde");
@@ -110,8 +110,8 @@ class ViewManager(editor: JavaEditor) {
             }
             .takeWhile(_ != null)
         ) {
-          appCmdQueue.add(
-            AppCmd.fromJSON(line)
+          viewEventQueue.add(
+            ViewEvent.fromJSON(line)
           );
         }
         ()
@@ -248,9 +248,9 @@ class ViewManager(editor: JavaEditor) {
     val cmdProcessThread = new Thread(() => {
       var noExit = true;
       while (noExit) {
-        val cmd = appCmdQueue.take();
+        val cmd = viewEventQueue.take();
         cmd match {
-          case AppCmd.EditorManagerCmd(cmd, requestId) => {
+          case ViewEvent.EditorManagerCmd(cmd, requestId) => {
             import scala.concurrent.ExecutionContext.Implicits.global
             val done = Promise[Unit]();
             editorManager.send(cmd, done);
@@ -263,7 +263,7 @@ class ViewManager(editor: JavaEditor) {
               )
             })
           }
-          case AppCmd.Exit() => {
+          case ViewEvent.Exit() => {
             fileWatchThread.interrupt();
             sscThread.interrupt();
             ViewManager.instances.synchronized {

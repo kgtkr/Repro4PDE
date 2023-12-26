@@ -1,7 +1,7 @@
 package repro4pde.view;
 
 import java.util.concurrent.LinkedTransferQueue
-import repro4pde.view.shared.{AppCmd, ViewCmd}
+import repro4pde.view.shared.{ViewEvent, ViewCmd}
 import scala.concurrent.Promise
 import scalafx.geometry.Insets
 import scalafx.scene.Scene
@@ -69,7 +69,7 @@ enum PlayerState {
 object View extends JFXApp3 {
   var config: Config = null;
   var locale: Locale = null;
-  val appCmdQueue = new LinkedTransferQueue[AppCmd]();
+  val viewEventQueue = new LinkedTransferQueue[ViewEvent]();
   var requestIdCounter = 0;
   val requestIdMap = MMap[Int, Promise[Unit]]();
 
@@ -90,7 +90,7 @@ object View extends JFXApp3 {
       for (
         cmd <- Iterator
           .continually {
-            appCmdQueue.take()
+            viewEventQueue.take()
           }
       ) {
         val bytes = cmd.toBytes();
@@ -682,7 +682,7 @@ object View extends JFXApp3 {
           );
         }
         cmdProcessThread.interrupt();
-        appCmdQueue.add(AppCmd.Exit());
+        viewEventQueue.add(ViewEvent.Exit());
       }
     }
   }
@@ -1007,6 +1007,6 @@ object View extends JFXApp3 {
     requestIdMap.synchronized {
       requestIdMap += (requestId -> done);
     }
-    appCmdQueue.add(AppCmd.EditorManagerCmd(cmd, requestId));
+    viewEventQueue.add(ViewEvent.EditorManagerCmd(cmd, requestId));
   }
 }

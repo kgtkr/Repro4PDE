@@ -5,7 +5,7 @@ import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-enum AppCmd {
+enum ViewEvent {
   case EditorManagerCmd(
       cmd: repro4pde.view.shared.EditorManagerCmd,
       requestId: Int
@@ -19,11 +19,11 @@ enum AppCmd {
   }
 }
 
-object AppCmd {
-  implicit val encoder: Encoder[AppCmd] = deriveEncoder
-  implicit val decoder: Decoder[AppCmd] = deriveDecoder
+object ViewEvent {
+  implicit val encoder: Encoder[ViewEvent] = deriveEncoder
+  implicit val decoder: Decoder[ViewEvent] = deriveDecoder
 
-  def fromJSON(json: String): AppCmd = {
-    decode[AppCmd](json).right.get
+  def fromJSON(json: String): ViewEvent = {
+    decode[ViewEvent](json).right.get
   }
 }
