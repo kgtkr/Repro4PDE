@@ -30,6 +30,7 @@ import java.io.InputStreamReader
 import java.nio.channels.Channels
 import java.nio.channels.ClosedByInterruptException
 import scala.util.chaining._
+import processing.app.exec.StreamRedirectThread
 
 object ViewManager {
   val instances = MMap[JavaEditor, ViewManager]();
@@ -155,10 +156,22 @@ class ViewManager(editor: JavaEditor) {
         Language.getLanguage(),
         editorManager.config.asJson.noSpaces
       )
-        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-        .redirectError(ProcessBuilder.Redirect.INHERIT)
         .start();
     };
+
+    val outThread = new StreamRedirectThread(
+      "JVM stdout Reader",
+      process.getInputStream(),
+      System.out
+    );
+    outThread.start();
+
+    val errThread = new StreamRedirectThread(
+      "JVM stderr Reader",
+      process.getErrorStream(),
+      System.err
+    );
+    errThread.start();
 
     editorManager.start()
 
