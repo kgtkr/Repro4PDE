@@ -7,6 +7,7 @@ enum ViewEvent {
       cmd: repro4pde.view.shared.EditorManagerCmd,
       requestId: Int
   )
+  // EditorManager.Exit とかぶるのでどっちか消したい
   case Exit()
 }
 

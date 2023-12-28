@@ -12,74 +12,79 @@ import java.nio.channels.Channels
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable.{Map => MMap}
 import repro4pde.view.shared.ViewEvent
+import scalafx.application.Platform
 
 @main def main(sockPath: String, language: String) = {
-  val sc = {
-    val sockAddr = UnixDomainSocketAddress.of(sockPath);
-    val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
-    sc.connect(sockAddr);
-    sc
-  };
-  val locale = Locale.getLocale(language);
-  val views = MMap[Int, View]();
-  val eventQueue = new LinkedTransferQueue[ViewCollectionEvent]();
+  Platform.implicitExit = false;
+  Platform.startup(() => {
+    val sc = {
+      val sockAddr = UnixDomainSocketAddress.of(sockPath);
+      val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
+      sc.connect(sockAddr);
+      sc
+    };
+    val locale = Locale.getLocale(language);
+    val views = MMap[Int, View]();
+    val eventQueue = new LinkedTransferQueue[ViewCollectionEvent]();
 
-  new Thread(() => {
-    for (
-      event <- Iterator
-        .continually {
-          eventQueue.take()
-        }
-    ) {
-      event match {
-        case ViewCollectionEvent.ViewEvent(id, ViewEvent.Exit()) => {
-          views.synchronized {
-            views.remove(id);
+    new Thread(() => {
+      for (
+        event <- Iterator
+          .continually {
+            eventQueue.take()
           }
-        }
-        case _ => ()
-      }
-
-      val bytes = event.toBytes();
-      sc.write(bytes);
-    }
-  }).start();
-
-  new Thread(() => {
-    val bs = new BufferedReader(
-      new InputStreamReader(
-        Channels.newInputStream(sc),
-        StandardCharsets.UTF_8
-      )
-    );
-
-    for (
-      line <- Iterator
-        .continually {
-          bs.readLine()
-        }
-    ) {
-      val cmd =
-        ViewCollectionCmd.fromJSON(line);
-
-        cmd match {
-          case ViewCollectionCmd.ViewCmd(id, cmd) => {
-            val view = views.synchronized {
-              views(id)
-            }
-            view.handleCmd(cmd);
-          }
-          case ViewCollectionCmd.Create(id, config) => {
-            val view = View(config, locale);
-            view.listen { event =>
-              eventQueue.add(ViewCollectionEvent.ViewEvent(id, event));
-            }
-            view.start();
+      ) {
+        event match {
+          case ViewCollectionEvent.ViewEvent(id, ViewEvent.Exit()) => {
             views.synchronized {
-              views(id) = view;
+              views.remove(id);
             }
           }
+          case _ => ()
         }
-    }
-  }).start();
+
+        val bytes = event.toBytes();
+        sc.write(bytes);
+      }
+    }).start();
+
+    new Thread(() => {
+      val bs = new BufferedReader(
+        new InputStreamReader(
+          Channels.newInputStream(sc),
+          StandardCharsets.UTF_8
+        )
+      );
+
+      for (
+        line <- Iterator
+          .continually {
+            bs.readLine()
+          }
+      ) {
+        val cmd =
+          ViewCollectionCmd.fromJSON(line);
+
+          cmd match {
+            case ViewCollectionCmd.ViewCmd(id, cmd) => {
+              val view = views.synchronized {
+                views(id)
+              }
+              view.handleCmd(cmd);
+            }
+            case ViewCollectionCmd.Create(id, config) => {
+              val view = View(config, locale);
+              view.listen { event =>
+                eventQueue.add(ViewCollectionEvent.ViewEvent(id, event));
+              }
+              view.start();
+              views.synchronized {
+                views(id) = view;
+              }
+            }
+          }
+      }
+    }).start();
+  });
+
 }

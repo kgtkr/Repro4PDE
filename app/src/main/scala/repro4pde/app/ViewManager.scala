@@ -24,105 +24,73 @@ import java.io.File
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.ServerSocketChannel
 import java.net.StandardProtocolFamily
-import io.circe._, io.circe.generic.semiauto._, io.circe.syntax._
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.channels.Channels
-import java.nio.channels.ClosedByInterruptException
 import scala.util.chaining._
 import processing.app.exec.StreamRedirectThread
+import repro4pde.view.shared.ViewCollectionEvent
+import repro4pde.view.shared.ViewCollectionCmd
 
 object ViewManager {
   val instances = MMap[JavaEditor, ViewManager]();
+  val editors = MMap[Int, JavaEditor]();
+  // ロックはeditorsに対して行う
+  var idCounter = 0;
 
-  def show(editor: JavaEditor) = {
-    val mViewManager = instances.synchronized {
-      instances.get(editor)
-    };
+  val cmdQueue = new LinkedTransferQueue[ViewCollectionCmd]();
 
-    mViewManager match {
-      case Some(viewManager) => {
-        viewManager.cmdQueue.add(ViewCmd.FocusRequest())
-      }
-      case None => {
-        val viewManager = new ViewManager(editor)
-        viewManager.start()
-        instances.synchronized {
-          instances(editor) = viewManager
-        }
-      }
-    };
-  }
-}
-
-class ViewManager(editor: JavaEditor) {
-  val cmdQueue = new LinkedTransferQueue[ViewCmd]();
-  val viewEventQueue = new LinkedTransferQueue[ViewEvent]();
-
-  def start() = {
+  def init() = {
     val runtimeDir = Files.createTempDirectory("repro4pde");
     runtimeDir.toFile().deleteOnExit();
     val sockPath = Path.of(runtimeDir.toString(), "repro4pde.sock");
     val sockAddr = UnixDomainSocketAddress.of(sockPath);
     val ssc = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
     ssc.bind(sockAddr);
-    val sscThread =
+    new Thread(() => {
+      val sc = ssc.accept();
+
       new Thread(() => {
-        val sc = ssc.accept();
-
-        val cmdThread = new Thread(() => {
-          for (
-            cmd <- Iterator
-              .continually({
-                try {
-                  Some(cmdQueue.take())
-                } catch {
-                  case e: InterruptedException => {
-                    None
-                  }
-                }
-              })
-              .mapWhile(identity)
-          ) {
-            sc.write(cmd.toBytes());
-          }
-        });
-        cmdThread.start();
-
-        val bs = new BufferedReader(
-          new InputStreamReader(
-            Channels.newInputStream(sc),
-            StandardCharsets.UTF_8
-          )
-        );
-
         for (
-          line <- Iterator
-            .continually {
-              try {
-                bs.readLine()
-              } catch {
-                case e: ClosedByInterruptException => {
-                  cmdThread.interrupt();
-                  null
-                }
-              }
-            }
-            .takeWhile(_ != null)
+          cmd <- Iterator
+            .continually({
+              cmdQueue.take()
+            })
         ) {
-          viewEventQueue.add(
-            ViewEvent.fromJSON(line)
-          );
+          sc.write(cmd.toBytes());
         }
-        ()
-      });
-    sscThread.start();
+      }).start();
 
-    val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
-    val editorManager = new EditorManager(editor)
-    editorManager.listen { event =>
-      cmdQueue.add(ViewCmd.EditorManagerEvent(event))
-    };
+      val bs = new BufferedReader(
+        new InputStreamReader(
+          Channels.newInputStream(sc),
+          StandardCharsets.UTF_8
+        )
+      );
+
+      for (
+        line <- Iterator
+          .continually {
+            bs.readLine()
+          }
+      ) {
+        val event = ViewCollectionEvent.fromJSON(line);
+
+        event match {
+          case ViewCollectionEvent.ViewEvent(id, event) => {
+            val editor = editors.synchronized {
+              editors(id)
+            };
+            val view = instances.synchronized {
+              instances(editor)
+            };
+
+            view.eventQueue.add(event);
+          }
+        }
+      }
+      ()
+    }).start();
 
     val process = {
       val java = PPlatform.getJavaPath();
@@ -145,7 +113,7 @@ class ViewManager(editor: JavaEditor) {
         .map(name => libDir.resolve(name.trim()).toString())
         .pipe(filterCpUrls)
         .mkString(File.pathSeparator);
-      val className = "repro4pde.view.View";
+      val className = "repro4pde.view.main";
 
       new ProcessBuilder(
         java,
@@ -153,27 +121,104 @@ class ViewManager(editor: JavaEditor) {
         cp,
         className,
         sockPath.toString(),
-        Language.getLanguage(),
-        editorManager.config.asJson.noSpaces
+        Language.getLanguage()
       )
         .start();
     };
 
-    val outThread = new StreamRedirectThread(
+    new StreamRedirectThread(
       "JVM stdout Reader",
       process.getInputStream(),
       System.out
-    );
-    outThread.start();
+    ).start();
 
-    val errThread = new StreamRedirectThread(
+    new StreamRedirectThread(
       "JVM stderr Reader",
       process.getErrorStream(),
       System.err
-    );
-    errThread.start();
+    ).start();
+  }
 
-    editorManager.start()
+  private def filterCpUrls(paths: Array[String]) = {
+    val allPlatforms = Seq(
+      "linux",
+      "linux-aarch64",
+      "mac-aarch64",
+      "mac",
+      "win"
+    );
+
+    val osName = System.getProperty("os.name").toLowerCase();
+    val osArch = System.getProperty("os.arch").toLowerCase();
+
+    val platformOs = if (osName.startsWith("linux")) {
+      "linux"
+    } else if (osName.startsWith("mac")) {
+      "mac"
+    } else if (osName.startsWith("windows")) {
+      "win"
+    } else {
+      throw new Exception("Unsupported OS: " + osName)
+    };
+
+    val platformArch = if (osArch == "aarch64") {
+      "-aarch64"
+    } else if (osArch == "x86_64") {
+      ""
+    } else if (osArch == "amd64") {
+      ""
+    } else {
+      throw new Exception("Unsupported arch: " + osArch)
+    };
+
+    val platform = platformOs + platformArch;
+
+    paths.filter(path => {
+      val name = path.substring(path.lastIndexOf("/") + 1);
+      !name.startsWith("javafx-") || !allPlatforms.exists(platform =>
+        name.endsWith("-" + platform + ".jar")
+      ) || name.endsWith("-" + platform + ".jar")
+    })
+  }
+
+  def show(editor: JavaEditor) = {
+    val mViewManager = instances.synchronized {
+      instances.get(editor)
+    };
+
+    mViewManager match {
+      case Some(viewManager) => {
+        viewManager.addCmd(ViewCmd.FocusRequest())
+      }
+      case None => {
+        val id = editors.synchronized {
+          val id = idCounter;
+          idCounter += 1;
+          editors(id) = editor;
+          id
+        };
+        val viewManager = new ViewManager(id, editor)
+        instances.synchronized {
+          instances(editor) = viewManager
+        }
+        viewManager.start()
+      }
+    };
+  }
+}
+
+class ViewManager(id: Int, editor: JavaEditor) {
+  val eventQueue = new LinkedTransferQueue[ViewEvent]();
+
+  def start() = {
+    val sketchPath = editor.getSketch().getFolder().getAbsolutePath();
+    val editorManager = new EditorManager(editor)
+    editorManager.listen { event =>
+      addCmd(ViewCmd.EditorManagerEvent(event))
+    };
+    ViewManager.cmdQueue.add(
+      ViewCollectionCmd.Create(id, editorManager.config)
+    )
 
     // 実験用設定なので一度無効化したボタンを元に戻す必要はない
     if (editorManager.config.disablePdeButton) {
@@ -227,7 +272,7 @@ class ViewManager(editor: JavaEditor) {
             event.context() match {
               case filename: Path => {
                 if (filename.toString().endsWith(".pde")) {
-                  cmdQueue.add(
+                  addCmd(
                     ViewCmd.FileChanged()
                   )
                 }
@@ -248,14 +293,14 @@ class ViewManager(editor: JavaEditor) {
     val cmdProcessThread = new Thread(() => {
       var noExit = true;
       while (noExit) {
-        val cmd = viewEventQueue.take();
+        val cmd = eventQueue.take();
         cmd match {
           case ViewEvent.EditorManagerCmd(cmd, requestId) => {
             import scala.concurrent.ExecutionContext.Implicits.global
             val done = Promise[Unit]();
             editorManager.send(cmd, done);
             done.future.onComplete(result => {
-              cmdQueue.add(
+              addCmd(
                 ViewCmd.EditorManagerCmdFinished(
                   requestId,
                   result.failed.toOption.map(_.getMessage())
@@ -265,7 +310,9 @@ class ViewManager(editor: JavaEditor) {
           }
           case ViewEvent.Exit() => {
             fileWatchThread.interrupt();
-            sscThread.interrupt();
+            ViewManager.editors.synchronized {
+              ViewManager.editors.remove(id)
+            }
             ViewManager.instances.synchronized {
               ViewManager.instances.remove(editor)
             }
@@ -277,45 +324,9 @@ class ViewManager(editor: JavaEditor) {
     cmdProcessThread.start();
   }
 
-  def filterCpUrls(paths: Array[String]) = {
-    val allPlatforms = Seq(
-      "linux",
-      "linux-aarch64",
-      "mac-aarch64",
-      "mac",
-      "win"
-    );
-
-    val osName = System.getProperty("os.name").toLowerCase();
-    val osArch = System.getProperty("os.arch").toLowerCase();
-
-    val platformOs = if (osName.startsWith("linux")) {
-      "linux"
-    } else if (osName.startsWith("mac")) {
-      "mac"
-    } else if (osName.startsWith("windows")) {
-      "win"
-    } else {
-      throw new Exception("Unsupported OS: " + osName)
-    };
-
-    val platformArch = if (osArch == "aarch64") {
-      "-aarch64"
-    } else if (osArch == "x86_64") {
-      ""
-    } else if (osArch == "amd64") {
-      ""
-    } else {
-      throw new Exception("Unsupported arch: " + osArch)
-    };
-
-    val platform = platformOs + platformArch;
-
-    paths.filter(path => {
-      val name = path.substring(path.lastIndexOf("/") + 1);
-      !name.startsWith("javafx-") || !allPlatforms.exists(platform =>
-        name.endsWith("-" + platform + ".jar")
-      ) || name.endsWith("-" + platform + ".jar")
-    })
+  def addCmd(cmd: ViewCmd) = {
+    ViewManager.cmdQueue.add(
+      ViewCollectionCmd.ViewCmd(id, cmd)
+    )
   }
 }

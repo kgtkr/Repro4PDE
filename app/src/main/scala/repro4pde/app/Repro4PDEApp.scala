@@ -12,6 +12,7 @@ object Repro4PDEApp {
     this.base = base
     Repro4PDEApp.toolName = toolName
     Repro4PDEApp.isDebug = toolName == "Repro4PDEDev"
+    ViewManager.init()
   }
 
   def run() = {

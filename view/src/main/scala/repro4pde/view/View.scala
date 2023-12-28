@@ -544,6 +544,7 @@ class View(val config: Config, val locale: Locale) {
     }
 
     stage.show();
+    stage.requestFocus();
   }
 
   private def createDiffNode(sourceBuild: Build, targetBuild: Build): Region = {
