@@ -1,9 +1,6 @@
 package repro4pde.view.shared;
 
-import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
-  io.circe.syntax._
-import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
+import io.circe._, io.circe.generic.semiauto._
 
 enum ViewEvent {
   case EditorManagerCmd(

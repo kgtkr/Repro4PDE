@@ -1,6 +1,5 @@
 package repro4pde.view.shared
-import io.circe._, io.circe.generic.semiauto._, io.circe.parser._,
-  io.circe.syntax._
+import io.circe._, io.circe.generic.semiauto._
 
 enum ViewCmd {
   case EditorManagerEvent(event: repro4pde.view.shared.EditorManagerEvent)

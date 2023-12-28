@@ -1,6 +1,5 @@
 package repro4pde.view;
 
-import java.util.concurrent.LinkedTransferQueue
 import repro4pde.view.shared.{ViewEvent, ViewCmd}
 import scala.concurrent.Promise
 import scalafx.geometry.Insets
@@ -48,17 +47,8 @@ import scala.collection.mutable.Set as MSet
 import scala.util.Success
 import scala.util.Failure
 import scala.jdk.CollectionConverters._
-import scalafx.application.JFXApp3
-import io.circe._, io.circe.parser._
-import java.net.UnixDomainSocketAddress
-import java.nio.channels.SocketChannel
-import java.net.StandardProtocolFamily
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.nio.channels.Channels
-import java.nio.charset.StandardCharsets
 import scala.collection.mutable.{Map => MMap}
-import java.nio.channels.ClosedByInterruptException
+import scalafx.stage.Stage
 
 enum PlayerState {
   case Playing;
@@ -66,68 +56,79 @@ enum PlayerState {
   case Stopped(nextPlaying: Boolean) // nextPlaying: reload時に自動再生される状態か
 }
 
-object View extends JFXApp3 {
-  var config: Config = null;
-  var locale: Locale = null;
-  val viewEventQueue = new LinkedTransferQueue[ViewEvent]();
+class View(val config: Config, val locale: Locale) {
   var requestIdCounter = 0;
   val requestIdMap = MMap[Int, Promise[Unit]]();
+  var eventListeners = List[ViewEvent => Unit]();
 
-  override def start(): Unit = {
-    val sockPath = parameters.raw(0);
-    val language = parameters.raw(1);
-    config = decode[Config](parameters.raw(2)).right.get;
-    locale = Locale.getLocale(language)
+  val loading = BooleanProperty(false);
+  val queue = new MQueue[() => Unit]();
+  def addQueue(f: => Unit) = {
+    queue.enqueue(() => f)
+    if (!loading.value) {
+      nextQueue()
+    }
+  }
+  def nextQueue() = {
+    if (queue.nonEmpty) {
+      val f = queue.dequeue();
+      loading.value = true
+      f();
+    }
+  }
 
-    val sc = {
-      val sockAddr = UnixDomainSocketAddress.of(sockPath);
-      val sc = SocketChannel.open(StandardProtocolFamily.UNIX);
-      sc.connect(sockAddr);
-      sc
-    };
+  val playerState = ObjectProperty(PlayerState.Stopped(false));
+  val sliderValueProperty = DoubleProperty(0);
+  val sliderMaxProperty = DoubleProperty(0);
+  val sliderValueChangingProperty = BooleanProperty(false);
+  val currentBuildProperty = ObjectProperty[Option[Build]](None);
+  val slaveBuildProperty = ObjectProperty[Option[Build]](None);
+  val diffNodeProperty = ObjectProperty[Region](new VBox());
+  val slaveErrorProperty = ObjectProperty[Option[String]](None);
+  val screenshotsProperty = ObjectProperty[SortedMap[
+    Int,
+    Image
+  ]](SortedMap.empty[Int, Image]);
+  val mouseHoverSliderValueProperty =
+    ObjectProperty[Option[Int]](None);
 
-    new Thread(() => {
-      for (
-        cmd <- Iterator
-          .continually {
-            viewEventQueue.take()
+  var screenshotPaths = SortedMap.empty[Int, String]
+  val screenshotXProperty = DoubleProperty(0)
+  val screenshotYProperty = DoubleProperty(0)
+  val loadingScreenshotValues = MSet.empty[Int]
+
+  def donePromise(onSuccess: => Unit = {}) = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    val promise = Promise[Unit]();
+    promise.future.onComplete(result => {
+      Platform.runLater {
+        loading.value = false
+
+        result match {
+          case Success(_) => {
+            onSuccess
           }
-      ) {
-        val bytes = cmd.toBytes();
-        sc.write(bytes);
-      }
-    }).start();
-
-    val loading = BooleanProperty(false);
-    val queue = new MQueue[() => Unit]();
-    def addQueue(f: => Unit) = {
-      queue.enqueue(() => f)
-      if (!loading.value) {
+          case Failure(e) => {
+            // TODO: エラーの種類によってはログに残さない(ビルドエラーなど)
+            System.err.println(e);
+          }
+        }
         nextQueue()
       }
-    }
-    def nextQueue() = {
-      if (queue.nonEmpty) {
-        val f = queue.dequeue();
-        loading.value = true
-        f();
-      }
-    }
+    })
+    promise
+  }
 
-    val playerState = ObjectProperty(PlayerState.Stopped(false));
-    val sliderValueProperty = DoubleProperty(0);
-    val sliderMaxProperty = DoubleProperty(0);
-    val sliderValueChangingProperty = BooleanProperty(false);
-    val currentBuildProperty = ObjectProperty[Option[Build]](None);
-    val slaveBuildProperty = ObjectProperty[Option[Build]](None);
-    val diffNodeProperty = ObjectProperty[Region](new VBox());
-    val slaveErrorProperty = ObjectProperty[Option[String]](None);
-    val screenshotsProperty = ObjectProperty[SortedMap[
-      Int,
-      Image
-    ]](SortedMap.empty[Int, Image]);
-    val mouseHoverSliderValueProperty =
-      ObjectProperty[Option[Int]](None);
+  var stage: Stage = null;
+
+  def start() = {
+    Platform.runLater {
+      startInner()
+    }
+  }
+
+  private def startInner(): Unit = {
     val screenshotProperty =
       Bindings.createObjectBinding[Option[Image]](
         () => {
@@ -148,10 +149,6 @@ object View extends JFXApp3 {
         screenshotsProperty
       )
 
-    var screenshotPaths = SortedMap.empty[Int, String]
-    val screenshotXProperty = DoubleProperty(0)
-    val screenshotYProperty = DoubleProperty(0)
-    val loadingScreenshotValues = MSet.empty[Int]
     mouseHoverSliderValueProperty.onChange { (_, _, _) =>
       mouseHoverSliderValueProperty.value
         .flatMap(value =>
@@ -206,31 +203,8 @@ object View extends JFXApp3 {
       updateDiffNodeProperty()
     }
 
-    def donePromise(onSuccess: => Unit = {}) = {
-      import scala.concurrent.ExecutionContext.Implicits.global
-
-      val promise = Promise[Unit]();
-      promise.future.onComplete(result => {
-        Platform.runLater {
-          loading.value = false
-
-          result match {
-            case Success(_) => {
-              onSuccess
-            }
-            case Failure(e) => {
-              // TODO: エラーの種類によってはログに残さない(ビルドエラーなど)
-              System.err.println(e);
-            }
-          }
-          nextQueue()
-        }
-      })
-      promise
-    }
-
     var closeClickCount = 0;
-    stage = new JFXApp3.PrimaryStage {
+    stage = new Stage {
       title = "Repro4PDE"
       scene = new Scene(600, 300) {
         fill = Color.rgb(240, 240, 240)
@@ -554,122 +528,6 @@ object View extends JFXApp3 {
       }
     };
 
-    val cmdProcessThread =
-      new Thread(() => {
-        val bs = new BufferedReader(
-          new InputStreamReader(
-            Channels.newInputStream(sc),
-            StandardCharsets.UTF_8
-          )
-        );
-
-        for (
-          line <- Iterator
-            .continually {
-              try {
-                bs.readLine()
-              } catch {
-                case e: ClosedByInterruptException => {
-                  null
-                }
-              }
-            }
-            .takeWhile(_ != null)
-        ) {
-          val cmd = ViewCmd.fromJSON(line);
-          cmd match {
-            case ViewCmd.EditorManagerEvent(event) => {
-              Platform.runLater {
-                event match {
-                  case EditorManagerEvent
-                        .UpdateLocation(value2, max2) => {
-                    sliderMaxProperty.value = max2.toDouble / 60
-                    if (!sliderValueChangingProperty.value) {
-                      sliderValueProperty.value = value2.toDouble / 60
-                    }
-                  }
-                  case EditorManagerEvent.Stopped(
-                        playing
-                      ) => {
-                    playerState.value = PlayerState.Stopped(playing)
-                  }
-                  case EditorManagerEvent
-                        .CreatedBuild(build) => {
-                    currentBuildProperty.value = Some(build)
-                  }
-                  case EditorManagerEvent.ClearLog() => {
-                    slaveErrorProperty.value = None
-                  }
-                  case EditorManagerEvent
-                        .LogError(slaveId, error) => {
-                    if (slaveId.isDefined) {
-                      slaveErrorProperty.value = Some(error)
-                    }
-                  }
-                  case EditorManagerEvent.AddedScreenshots(
-                        added
-                      ) => {
-                    screenshotPaths ++= added
-                  }
-                  case EditorManagerEvent
-                        .ClearedScreenshots() => {
-                    screenshotPaths = SortedMap.empty[Int, String]
-                  }
-                }
-              }
-            }
-            case ViewCmd.FocusRequest() => {
-              Platform.runLater {
-                stage.requestFocus()
-              }
-            }
-            case ViewCmd.FileChanged() => {
-              Platform.runLater {
-                if (!config.disableAutoReload) {
-                  addQueue {
-                    editorManagerCmdSend(
-                      EditorManagerCmd.ReloadSketch(
-                        false
-                      ),
-                      donePromise {
-                        if (
-                          playerState.value == PlayerState
-                            .Stopped(
-                              true
-                            )
-                        ) {
-                          playerState.value = PlayerState.Playing;
-                        }
-                      }
-                    )
-                  }
-                }
-
-              }
-            }
-            case ViewCmd.EditorManagerCmdFinished(requestId, error) => {
-              val done = requestIdMap.synchronized {
-                val done = requestIdMap(requestId);
-                requestIdMap -= requestId
-                done
-              }
-
-              done.complete(
-                error match {
-                  case Some(error) => {
-                    Failure(new Exception(error))
-                  }
-                  case None => {
-                    Success(())
-                  }
-                }
-              )
-            }
-          }
-        }
-      });
-    cmdProcessThread.start();
-
     stage.onCloseRequest = evt => {
       if (config.disableCloseWindow && closeClickCount < 10) {
         closeClickCount += 1;
@@ -681,10 +539,11 @@ object View extends JFXApp3 {
             donePromise()
           );
         }
-        cmdProcessThread.interrupt();
-        viewEventQueue.add(ViewEvent.Exit());
+        eventListeners.foreach(_(ViewEvent.Exit()));
       }
     }
+
+    stage.show();
   }
 
   private def createDiffNode(sourceBuild: Build, targetBuild: Build): Region = {
@@ -1007,6 +866,102 @@ object View extends JFXApp3 {
     requestIdMap.synchronized {
       requestIdMap += (requestId -> done);
     }
-    viewEventQueue.add(ViewEvent.EditorManagerCmd(cmd, requestId));
+    eventListeners.foreach(_(ViewEvent.EditorManagerCmd(cmd, requestId)));
+  }
+
+  def listen(listener: ViewEvent => Unit) = {
+    eventListeners = listener :: eventListeners;
+  }
+
+  def handleCmd(cmd: ViewCmd) = {
+    cmd match {
+      case ViewCmd.EditorManagerEvent(event) => {
+        Platform.runLater {
+          event match {
+            case EditorManagerEvent
+                  .UpdateLocation(value2, max2) => {
+              sliderMaxProperty.value = max2.toDouble / 60
+              if (!sliderValueChangingProperty.value) {
+                sliderValueProperty.value = value2.toDouble / 60
+              }
+            }
+            case EditorManagerEvent.Stopped(
+                  playing
+                ) => {
+              playerState.value = PlayerState.Stopped(playing)
+            }
+            case EditorManagerEvent
+                  .CreatedBuild(build) => {
+              currentBuildProperty.value = Some(build)
+            }
+            case EditorManagerEvent.ClearLog() => {
+              slaveErrorProperty.value = None
+            }
+            case EditorManagerEvent
+                  .LogError(slaveId, error) => {
+              if (slaveId.isDefined) {
+                slaveErrorProperty.value = Some(error)
+              }
+            }
+            case EditorManagerEvent.AddedScreenshots(
+                  added
+                ) => {
+              screenshotPaths ++= added
+            }
+            case EditorManagerEvent
+                  .ClearedScreenshots() => {
+              screenshotPaths = SortedMap.empty[Int, String]
+            }
+          }
+        }
+      }
+      case ViewCmd.FocusRequest() => {
+        Platform.runLater {
+          stage.requestFocus()
+        }
+      }
+      case ViewCmd.FileChanged() => {
+        Platform.runLater {
+          if (!config.disableAutoReload) {
+            addQueue {
+              editorManagerCmdSend(
+                EditorManagerCmd.ReloadSketch(
+                  false
+                ),
+                donePromise {
+                  if (
+                    playerState.value == PlayerState
+                      .Stopped(
+                        true
+                      )
+                  ) {
+                    playerState.value = PlayerState.Playing;
+                  }
+                }
+              )
+            }
+          }
+
+        }
+      }
+      case ViewCmd.EditorManagerCmdFinished(requestId, error) => {
+        val done = requestIdMap.synchronized {
+          val done = requestIdMap(requestId);
+          requestIdMap -= requestId
+          done
+        }
+
+        done.complete(
+          error match {
+            case Some(error) => {
+              Failure(new Exception(error))
+            }
+            case None => {
+              Success(())
+            }
+          }
+        )
+      }
+    }
   }
 }
