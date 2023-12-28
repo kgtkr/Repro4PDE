@@ -137,6 +137,14 @@ object ViewManager {
       process.getErrorStream(),
       System.err
     ).start();
+
+    Runtime
+      .getRuntime()
+      .addShutdownHook(
+        new Thread(() => {
+          process.destroy();
+        })
+      );
   }
 
   private def filterCpUrls(paths: Array[String]) = {
