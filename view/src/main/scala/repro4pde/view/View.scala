@@ -874,7 +874,7 @@ class View(val config: Config, val locale: Locale) {
     eventListeners = listener :: eventListeners;
   }
 
-  def handleCmd(cmd: ViewCmd) = {
+  def handleCmd(cmd: ViewCmd): Unit = {
     cmd match {
       case ViewCmd.EditorManagerEvent(event) => {
         Platform.runLater {

@@ -224,6 +224,7 @@ class ViewManager(id: Int, editor: JavaEditor) {
     editorManager.listen { event =>
       addCmd(ViewCmd.EditorManagerEvent(event))
     };
+    editorManager.start();
     ViewManager.cmdQueue.add(
       ViewCollectionCmd.Create(id, editorManager.config)
     )
