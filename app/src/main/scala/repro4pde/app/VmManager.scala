@@ -32,6 +32,7 @@ import repro4pde.runtime.shared.RuntimeCmd
 import repro4pde.runtime.shared.RuntimeEvent
 import repro4pde.runtime.shared.FrameState
 import repro4pde.runtime.shared.InitParams
+import processing.mode.java.JavaEditor
 object VmManager {
   enum SlaveSyncCmd {
     case AddedEvents(frameStates: List[FrameState]);
@@ -76,6 +77,7 @@ object VmManager {
 }
 
 class VmManager(
+    val javaEditor: JavaEditor,
     val javaBuild: JavaBuild,
     val slaveMode: Boolean,
     val runnerListener: RunnerListener,
@@ -110,6 +112,10 @@ class VmManager(
     running = defaultRunning;
     val runner =
       new Runner(javaBuild, runnerListener);
+    // sketchLocationをslaveでも取得できるようにするため
+    val editorField = runner.getClass().getDeclaredField("editor");
+    editorField.setAccessible(true);
+    editorField.set(runner, javaEditor);
 
     val vm =
       runner.debug(Array(runtimeDir.toString()));

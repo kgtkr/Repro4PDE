@@ -307,6 +307,7 @@ class EditorManager(val editor: JavaEditor) {
       slaves.toSeq.map(id => (id -> createSlaveVm(id))): _*
     );
     val masterVmManager = new VmManager(
+      javaEditor = editor,
       javaBuild = currentBuild._2,
       slaveMode = false,
       runnerListener = new RunnerListenerEdtAdapter(editor) {
@@ -375,6 +376,7 @@ class EditorManager(val editor: JavaEditor) {
   private def createSlaveVm(buildId: Int) = {
     val slaveVm = new SlaveVm(
       new VmManager(
+        javaEditor = editor,
         javaBuild = builds(buildId),
         slaveMode = true,
         runnerListener = new RunnerListener {
