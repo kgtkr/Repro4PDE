@@ -4,6 +4,14 @@
 https://github.com/kgtkr/Repro4PDE/assets/17868838/2fc6d6ab-2c92-4424-bb1e-2f88ae78496c
 
 
+## Install
+1. Requires Processing 4.x
+2. Download and unzip: https://kgtkr.github.io/Repro4PDE/Repro4PDE.zip 
+3. Open the Processing Preferences and check the "Sketchbook folder" (hereinafter referred to as `<sketchbook>`)
+4. Copy the unzipped `Repro4PDE` folder to `<sketchbook>/tools`. Check that `<sketchbook>/tools/Repro4PDE/tool.properties` exists
+5. Restart Processing
+6. Make sure `Repro4PDE` is added to `tools` in the menu.
+
 ## Usage
 1. Open sketch
 2. Select Repro4PDE from the tools menu (Untitled sketches are not supported)
