@@ -12,7 +12,7 @@ object Repro4PDEApp {
     this.base = base
     Repro4PDEApp.toolName = toolName
     Repro4PDEApp.isDebug = toolName == "Repro4PDEDev"
-    ControlPanel.init()
+    ViewManager.init()
   }
 
   def run() = {
@@ -20,7 +20,7 @@ object Repro4PDEApp {
     if (editor.getSketch().isUntitled()) {
       editor.statusError("Repro4PDE not support untitled sketch")
     } else {
-      ControlPanel.show(editor)
+      ViewManager.show(editor)
     }
   }
 }

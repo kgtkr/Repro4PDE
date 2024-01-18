@@ -7,7 +7,8 @@ lazy val processingTool = new ProcessingTool(
   allProjects,
   toolProject,
   appProject,
-  runtimeProject
+  runtimeProject,
+  viewProject
 );
 
 lazy val circeDependencies = Seq(
@@ -41,6 +42,46 @@ lazy val runtimeSharedProject = project
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-runtime-shared",
+    libraryDependencies ++= circeDependencies
+  );
+
+lazy val viewProject = project
+  .in(file("view"))
+  .dependsOn(viewSharedProject, utilsProject)
+  .settings(sharedSettings)
+  .settings(
+    name := "repro4pde-view",
+    libraryDependencies ++= circeDependencies,
+    libraryDependencies ++= Seq(
+      "javafx-base",
+      "javafx-controls",
+      "javafx-fxml",
+      "javafx-graphics",
+      "javafx-media",
+      "javafx-swing",
+      "javafx-web"
+    ).map(artifact =>
+      Seq(
+        "linux",
+        "linux-aarch64",
+        "mac-aarch64",
+        "mac",
+        "win"
+      ).foldLeft("org.openjfx" % artifact % "20")(_ classifier _),
+    ),
+    libraryDependencies ++= Seq(
+      "org.scalafx" %% "scalafx" % "20.0.0-R31" excludeAll (ExclusionRule(
+        organization = "org.openjfx"
+      )),
+      "io.github.java-diff-utils" % "java-diff-utils" % "4.12"
+    )
+  );
+
+lazy val viewSharedProject = project
+  .in(file("view-shared"))
+  .settings(sharedSettings)
+  .settings(
+    name := "repro4pde-view-shared",
     libraryDependencies ++= circeDependencies
   );
 
@@ -88,34 +129,11 @@ lazy val toolProject = project
 
 lazy val appProject = project
   .in(file("app"))
-  .dependsOn(utilsProject, runtimeSharedProject)
+  .dependsOn(utilsProject, runtimeSharedProject, viewSharedProject)
   .settings(sharedSettings)
   .settings(
     name := "repro4pde-app",
-    libraryDependencies ++= Seq(
-      "org.scalafx" %% "scalafx" % "20.0.0-R31" excludeAll (ExclusionRule(
-        organization = "org.openjfx"
-      )),
-      "io.github.java-diff-utils" % "java-diff-utils" % "4.12"
-    ),
     libraryDependencies ++= circeDependencies,
-    libraryDependencies ++= Seq(
-      "javafx-base",
-      "javafx-controls",
-      "javafx-fxml",
-      "javafx-graphics",
-      "javafx-media",
-      "javafx-swing",
-      "javafx-web"
-    ).map(artifact =>
-      Seq(
-        "linux",
-        "linux-aarch64",
-        "mac-aarch64",
-        "mac",
-        "win"
-      ).foldLeft("org.openjfx" % artifact % "20")(_ classifier _),
-    ),
     Compile / unmanagedJars ++= Processing.javaModeCpTask.value,
     Compile / unmanagedJars ++= Processing.libCpTask.value
   );
@@ -123,6 +141,8 @@ lazy val appProject = project
 lazy val allProjects = Seq(
   codegenProject,
   runtimeSharedProject,
+  viewSharedProject,
+  viewProject,
   utilsProject,
   runtimeProject,
   toolProject,

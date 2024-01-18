@@ -1,4 +1,4 @@
-package repro4pde.app
+package repro4pde.view
 
 object Locale {
   val defaultLocale = new Locale {

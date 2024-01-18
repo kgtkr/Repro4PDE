@@ -11,50 +11,7 @@ import java.nio.charset.StandardCharsets
 import scala.util.chaining._
 import java.lang.reflect.Method
 
-object Repro4PDE {
-  def filterCpUrls(urls: Array[URL]) = {
-    val allPlatforms = Seq(
-      "linux",
-      "linux-aarch64",
-      "mac-aarch64",
-      "mac",
-      "win"
-    );
-
-    val osName = System.getProperty("os.name").toLowerCase();
-    val osArch = System.getProperty("os.arch").toLowerCase();
-
-    val platformOs = if (osName.startsWith("linux")) {
-      "linux"
-    } else if (osName.startsWith("mac")) {
-      "mac"
-    } else if (osName.startsWith("windows")) {
-      "win"
-    } else {
-      throw new Exception("Unsupported OS: " + osName)
-    };
-
-    val platformArch = if (osArch == "aarch64") {
-      "-aarch64"
-    } else if (osArch == "x86_64") {
-      ""
-    } else if (osArch == "amd64") {
-      ""
-    } else {
-      throw new Exception("Unsupported arch: " + osArch)
-    };
-
-    val platform = platformOs + platformArch;
-
-    urls.filter(url => {
-      val path = url.getPath();
-      val name = path.substring(path.lastIndexOf("/") + 1);
-      !name.startsWith("javafx-") || !allPlatforms.exists(platform =>
-        name.endsWith("-" + platform + ".jar")
-      ) || name.endsWith("-" + platform + ".jar")
-    })
-  }
-}
+object Repro4PDE {}
 
 class Repro4PDE() extends Tool {
   var runMethod: Method = null
@@ -87,7 +44,6 @@ class Repro4PDE() extends Tool {
       .readString(libDir.resolve("app-classpath.txt"), StandardCharsets.UTF_8)
       .split(",")
       .map(name => libDir.resolve(name.trim()).toUri().toURL())
-      .pipe(Repro4PDE.filterCpUrls)
 
     val appClass = URLClassLoader
       .newInstance(
